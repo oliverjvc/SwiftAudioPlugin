@@ -97,11 +97,7 @@ public struct DelayPresetData: Codable {
 }
 
 /// Main plugin engine
-#if canImport(Combine)
-public class PluginEngine: ObservableObject {
-#else
-public class PluginEngine {
-#endif
+public class PluginEngine: PlatformObservable {
     public var eq: ParametricEQ
     public var compressor: Compressor
     public var reverb: Reverb

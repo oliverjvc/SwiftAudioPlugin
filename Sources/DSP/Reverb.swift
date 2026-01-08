@@ -96,11 +96,7 @@ class AllPassFilter {
 }
 
 /// Stereo reverb processor
-#if canImport(Combine)
-public class Reverb: BaseAudioProcessor, ObservableObject {
-#else
-public class Reverb: BaseAudioProcessor {
-#endif
+public class Reverb: BaseAudioProcessor, PlatformObservable {
     // Parameters
     public var roomSize: Float = 0.5 {
         didSet { updateParameters() }

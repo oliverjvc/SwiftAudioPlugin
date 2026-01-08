@@ -3,6 +3,15 @@
 
 import Foundation
 
+#if canImport(Combine)
+import Combine
+/// On platforms with Combine, use ObservableObject
+public typealias PlatformObservable = ObservableObject
+#else
+/// On platforms without Combine, use empty protocol
+public protocol PlatformObservable {}
+#endif
+
 /// Sample rate commonly used in audio processing
 public enum SampleRate: Double {
     case rate44100 = 44100.0

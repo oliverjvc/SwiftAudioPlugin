@@ -7,11 +7,7 @@ import Combine
 #endif
 
 /// Compressor with attack, release, ratio, threshold, and makeup gain
-#if canImport(Combine)
-public class Compressor: BaseAudioProcessor, ObservableObject {
-#else
-public class Compressor: BaseAudioProcessor {
-#endif
+public class Compressor: BaseAudioProcessor, PlatformObservable {
     // Parameters
     public var threshold: Float = -20.0      // dB
     public var ratio: Float = 4.0           // ratio:1
@@ -121,11 +117,7 @@ public class Compressor: BaseAudioProcessor {
 }
 
 /// Limiter (compressor with infinite ratio)
-#if canImport(Combine)
-public class Limiter: BaseAudioProcessor, ObservableObject {
-#else
-public class Limiter: BaseAudioProcessor {
-#endif
+public class Limiter: BaseAudioProcessor, PlatformObservable {
     public var ceiling: Float = -0.3      // dB
     public var release: Float = 50.0     // ms
     

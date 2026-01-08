@@ -17,11 +17,7 @@ public enum EQBandType: String, CaseIterable, Codable {
 }
 
 /// Single EQ band with biquad filter
-#if canImport(Combine)
-public class EQBand: ObservableObject {
-#else
-public class EQBand {
-#endif
+public class EQBand: PlatformObservable {
     public var frequency: Float = 1000.0  // Hz
     public var gain: Float = 0.0          // dB
     public var q: Float = 1.0             // Q factor
@@ -151,11 +147,7 @@ public class EQBand {
 }
 
 /// Multi-band parametric equalizer
-#if canImport(Combine)
-public class ParametricEQ: BaseAudioProcessor, ObservableObject {
-#else
-public class ParametricEQ: BaseAudioProcessor {
-#endif
+public class ParametricEQ: BaseAudioProcessor, PlatformObservable {
     public var bands: [EQBand]
     public var outputGain: Float = 0.0  // dB
     

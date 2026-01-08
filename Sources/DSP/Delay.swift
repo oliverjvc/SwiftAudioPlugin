@@ -7,11 +7,7 @@ import Combine
 #endif
 
 /// Delay effect with feedback and filtering
-#if canImport(Combine)
-public class StereoDelay: BaseAudioProcessor, ObservableObject {
-#else
-public class StereoDelay: BaseAudioProcessor {
-#endif
+public class StereoDelay: BaseAudioProcessor, PlatformObservable {
     // Parameters
     public var delayTimeL: Float = 250.0   // ms
     public var delayTimeR: Float = 250.0   // ms
