@@ -328,7 +328,8 @@ public class SwiftAudioUnit: AUAudioUnit {
     // MARK: - AUAudioUnit Overrides
     
     public override var parameterTree: AUParameterTree? {
-        return _parameterTree
+        get { return _parameterTree }
+        set { _parameterTree = newValue }
     }
     
     public override var inputBusses: AUAudioUnitBusArray {
