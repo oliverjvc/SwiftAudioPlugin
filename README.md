@@ -1,231 +1,123 @@
 # Swift Audio Plugin
 
-Professional audio plugin similar to Waves Audio plugins, built entirely in Swift.
+A Swift audio channel strip for macOS: five-band EQ, compressor, stereo delay,
+algorithmic reverb and limiter. The Audio Unit v3 build is intended for Logic Pro
+and includes a custom SwiftUI editor, 50 automatable parameters, four factory
+presets and project/preset state restoration.
 
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue)
-![Swift](https://img.shields.io/badge/Swift-5.9+-orange)
-![License](https://img.shields.io/badge/license-MIT-green)
+## Build and test
 
-## Features
-
-### DSP Effects
-- **5-Band Parametric EQ** - Professional equalizer with adjustable frequency, gain, Q, and filter types
-- **Dynamics Compressor** - Full-featured compressor with threshold, ratio, attack, release, knee, and makeup gain
-- **Stereo Delay** - Tempo-syncable delay with ping-pong mode, feedback, and filtering
-- **Algorithmic Reverb** - Freeverb-style reverb with room size, damping, width, and pre-delay
-- **Brick-wall Limiter** - Final stage limiting for safe output levels
-
-### User Interface
-- Modern dark theme with professional audio plugin aesthetics
-- Rotary knobs with visual feedback
-- Real-time level meters with peak hold
-- Gain reduction visualization
-- EQ frequency response curve with draggable band points
-- Compression transfer curve display
-- Preset management system
-
-## Requirements
-
-### macOS (Primary Platform)
-- macOS 13.0+ (Ventura or later)
-- Swift 5.9+ for building, from Xcode or Apple Command Line Tools
-- Swift 6+ for the Swift Testing test suite
-- Apple Silicon (M1/M2) or Intel Mac
-
-### Windows (Testing/Development)
-- Windows 10/11
-- Swift for Windows (install via winget: `winget install Swift.Toolchain`)
-- Note: GUI requires macOS; Windows runs DSP in console mode
-
-## Installation
-
-### Clone and Build
+Requires macOS 13+, Apple Command Line Tools or Xcode, and Swift 6+ for tests.
+The CLT testing runtime can require macOS 14+ even though the plugin targets 13.
 
 ```bash
-# Clone the repository
 git clone https://github.com/oliverjvc/SwiftAudioPlugin.git
 cd SwiftAudioPlugin
-
-# Build the project
 swift build
-
-# Run tests
-bash scripts/test.sh
-
-# Run standalone app (macOS with GUI, Windows console mode)
-swift run
-```
-
-### Xcode (macOS)
-
-```bash
-# Generate Xcode project
-swift package generate-xcodeproj
-
-# Or open directly in Xcode
-open Package.swift
-```
-
-## Project Structure
-
-```
-Plugin/
-├── Package.swift              # Swift Package Manager manifest
-├── Sources/
-│   ├── DSP/                   # Audio processing (cross-platform)
-│   │   ├── AudioProcessor.swift    # Base protocols and utilities
-│   │   ├── Equalizer.swift         # Parametric EQ
-│   │   ├── Compressor.swift        # Dynamics compressor & limiter
-│   │   ├── Delay.swift             # Stereo delay effect
-│   │   ├── Reverb.swift            # Algorithmic reverb
-│   │   └── PluginEngine.swift      # Main processing chain
-│   │
-│   ├── UI/                    # SwiftUI interface (macOS/iOS)
-│   │   ├── Theme.swift             # Colors, fonts, styling
-│   │   ├── MainPluginView.swift    # Main plugin window
-│   │   ├── Components/             # Reusable UI components
-│   │   │   ├── Knob.swift          # Rotary controls
-│   │   │   ├── Meter.swift         # Level meters
-│   │   │   └── Buttons.swift       # Toggle/action buttons
-│   │   └── Panels/                 # Effect-specific panels
-│   │       ├── EQView.swift
-│   │       ├── CompressorView.swift
-│   │       ├── DelayView.swift
-│   │       └── ReverbView.swift
-│   │
-│   ├── Plugin/                # Audio Unit wrapper (macOS)
-│   │   └── AudioUnitPlugin.swift   # AU v3 implementation
-│   │
-│   └── App/                   # Standalone application
-│       └── SwiftAudioPluginApp.swift
-│
-└── Tests/
-    └── DSPTests/              # Unit tests for DSP
-        └── DSPTests.swift
-```
-
-## Usage
-
-### Standalone Application (macOS)
-
-Run the standalone app to test the plugin without a DAW:
-
-```bash
-swift run SwiftAudioPlugin
-```
-
-### Audio Unit Plugin
-
-The plugin registers as an Audio Unit v3 effect that can be loaded in any compatible DAW (Logic Pro, GarageBand, Ableton Live, etc.).
-
-### Windows Console Mode
-
-On Windows, the application runs in console mode and tests all DSP components:
-
-```bash
-swift run
-```
-
-## DSP Architecture
-
-### Signal Flow
-
-```
-Input → Input Gain → EQ → Compressor → Delay → Reverb → Limiter → Output Gain → Output
-```
-
-### Sample Rates
-- Supports 44.1kHz, 48kHz, 96kHz, and 192kHz
-- Automatic coefficient recalculation on sample rate change
-
-### Buffer Processing
-- Efficient block-based processing
-- Zero-latency processing (no lookahead)
-- Denormal prevention
-
-## UI Components
-
-### Knob Control
-- Vertical drag for value adjustment
-- Double-click to reset to default
-- Shift+drag for fine adjustment
-- Visual indicator and value display
-
-### Level Meters
-- Stereo metering with peak hold
-- Gain reduction display
-- Clip indicators
-
-### EQ Curve
-- Interactive frequency response display
-- Draggable band control points
-- Real-time curve updates
-
-## Presets
-
-Factory presets included:
-- **Warm Vocal** - Smooth vocal processing
-- **Punchy Drums** - Aggressive drum compression
-- **Ambient Pad** - Lush reverb and delay
-
-Save and load your own presets through the preset manager.
-
-## Development
-
-### Adding New Effects
-
-1. Create a new processor in `Sources/DSP/` implementing `AudioProcessor` protocol
-2. Add to the processing chain in `PluginEngine.swift`
-3. Create corresponding UI panel in `Sources/UI/Panels/`
-4. Add parameters to Audio Unit wrapper if needed
-
-### Running Tests
-
-The test suite uses Swift Testing and requires Swift 6 or newer. On macOS
-with Command Line Tools, use the wrapper to locate the bundled testing
-framework and its runtime libraries:
-
-```bash
 bash scripts/test.sh
 ```
 
-The wrapper runs `swift test` with the necessary search paths and forwards
-additional arguments, such as `--filter testEQ`. With a toolchain that already
-provides those paths (such as a full Xcode installation), run directly:
+`test.sh` runs `swift test` with the framework/runtime search paths needed by
+Command Line Tools. It forwards arguments, for example `--filter AudioUnitTests`.
+With a full Xcode toolchain that supplies those paths, `swift test` can be used
+without the wrapper. Open `Package.swift` directly to edit in Xcode.
+
+## Install the Audio Unit for Logic Pro
 
 ```bash
-swift test
+bash scripts/build-au.sh
+bash scripts/install-au.sh
+auval -v aufx swft Oliv -strict
+auval -v aufx swft Oliv -oop -strict
 ```
 
-The bundled testing runtime may require a newer macOS version than the app's
-macOS 13 deployment target. The Command Line Tools runtime used for validation
-requires macOS 14 or newer; this does not change the app's deployment target.
+The build script creates `Build/Swift Audio.app`, containing the AUv3 extension
+and its embedded framework. It uses Command Line Tools; a full Xcode installation
+is not needed. The installer copies it to `~/Applications/Swift Audio.app` and
+registers the extension. Initial macOS Audio Unit discovery can take a minute.
+If the first validation says the component is missing, check `auval -a` and retry
+once **OliverJ: Swift Audio Plugin** appears.
 
-### Code Style
-- Follow Swift API Design Guidelines
-- Use `@Published` for observable properties
-- Keep DSP code platform-agnostic
+Restart Logic Pro after installation. On an audio channel, choose an **Audio FX**
+slot, then **Audio Units → OliverJ → Swift Audio Plugin**. Mono and stereo channels
+are supported. If necessary, rescan this plugin in Logic's Plug-in Manager.
+Keep the containing app installed: this is an AUv3 extension, not a `.component`
+file to copy into `Library/Audio/Plug-Ins/Components`.
 
-## Known Limitations
+Opening **Swift Audio.app** displays the plugin's controls for inspection. That
+window does not capture or play audio; use the plugin on a track in Logic for
+sound. The older `swift run SwiftAudioPlugin` interface remains a separate DSP/UI
+demo and is not the installed AU editor.
 
-- Windows: No GUI support (SwiftUI requires macOS/iOS)
-- Audio Unit: macOS only (AU v3 is Apple's format)
-- No VST/VST3 support yet (would require C++ bridging)
+The local build contains the architecture of the Mac used to build it (arm64 on
+Apple Silicon, x86_64 on Intel). Run the host natively. It is signed ad hoc for
+local development; it is not a notarized distribution build. Sharing binaries
+requires appropriate signing/notarization and architecture builds.
 
-## Future Enhancements
+## Audio Unit controls
 
-- [ ] VST3 wrapper for cross-platform DAW support
-- [ ] Additional effects (chorus, phaser, saturation)
-- [ ] MIDI learn for parameter control
-- [ ] A/B comparison feature
-- [ ] Undo/redo system
-- [ ] Oversampling for improved analog character
+- **Main:** input/output gain and bypass.
+- **Equalizer:** five peak bands, each with frequency, gain, Q and enable controls.
+- **Compressor:** threshold, ratio, attack, release, makeup, knee and enable.
+- **Delay:** separate left/right times, feedback, wet/dry, ping-pong, filters and enable.
+- **Reverb:** room size, damping, wet/dry, stereo width, pre-delay and enable.
+- **Limiter:** ceiling, release and enable.
 
-## License
+Factory presets: Default, Warm Vocal, Punchy Drums and Ambient Pad. Logic can
+save the exposed parameters in projects and Audio Unit presets. The AU delay
+uses milliseconds; the DSP library's optional tempo-sync controls and EQ filter
+types are not exposed in this version's AU editor.
 
-MIT License - See LICENSE file for details.
+Signal flow:
 
-## Credits
+```
+Input → Input Gain → EQ → Compressor → Delay → Reverb → Output Gain → Limiter → Output
+```
 
-Built with Swift and SwiftUI by the development team.
-Inspired by professional audio plugins from Waves Audio, FabFilter, and others.
+The AU negotiates matching mono or stereo planar Float32 input/output, from
+8 kHz through 192 kHz. Delay/reverb storage is recreated at resource allocation
+for the negotiated sample rate. Render buffers are allocated ahead of time.
+UI/host values cross to the render thread through lock-free scalar atomics; the
+render thread owns the DSP engine. Scheduled changes and ramps are processed at
+sample offsets. This Swift implementation has not been formally certified for
+hard real-time safety.
+
+## Source layout
+
+- `Sources/DSP/`: processing algorithms and standalone preset serialization.
+- `Sources/Plugin/`: AU lifecycle, parameter/state handling and the AU editor.
+- `Sources/ParameterAtomics/`: C11 atomic storage shared by control/render threads.
+- `Sources/UI/`, `Sources/App/`: original standalone UI demo.
+- `AudioPlugin/`: host/extension entry points, metadata and extension entitlements.
+- `scripts/`: tests, local packaging and installation.
+- `Tests/DSPTests/`, `Tests/AudioUnitTests/`: DSP and AU integration tests.
+
+The AU tests cover state serialization, mono/stereo gain and bypass, variable
+block sizes, scheduled changes, ramps crossing blocks, null output buffers,
+format rejection, resource reallocation and render blocks cached before
+allocation. Apple `auval` separately checks the installed component.
+
+## Limitations
+
+- Logic Pro session playback and project reopening require testing in Logic itself;
+  a successful `auval` run does not replace that host-specific check.
+- No VST3 or AAX wrapper. The AU packaging/editor are macOS-only.
+- The standalone demo does not implement a microphone/audio-device engine.
+- The AU editor uses sliders; the standalone demo's meters and EQ graph are not
+  part of this AU editor.
+
+MIT License. See `LICENSE`.
+
+## Validation record
+
+Validated locally on 2026-10-20 with macOS 26.3, Apple Silicon and Swift 6.3.3:
+
+- `swift build`: passed.
+- `bash scripts/test.sh`: 42 tests passed in three suites.
+- `auval -v aufx swft Oliv -strict`: passed without warnings.
+- `auval -v aufx swft Oliv -oop -strict`: passed without warnings.
+- Installed bundle code signatures verified; preview controls visually checked,
+  including a compressor parameter change and restoration.
+- Logic Pro playback/project-reopen testing was not performed.
+
+Local build/test/validation logs are generated in the ignored `Build/` folder.

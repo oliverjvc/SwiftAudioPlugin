@@ -9,10 +9,10 @@ public final class SwiftAudioUnitViewController: AUViewController, AUAudioUnitFa
     private var unit: SwiftAudioUnit?
     public func createAudioUnit(with componentDescription: AudioComponentDescription) throws -> AUAudioUnit {
         let created = try SwiftAudioUnit(componentDescription: componentDescription)
-        unit = created
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.isViewLoaded else { return }
-            self.showControls(for: created)
+            guard let self else { return }
+            self.unit = created
+            if self.isViewLoaded { self.showControls(for: created) }
         }
         return created
     }
@@ -27,6 +27,7 @@ public final class SwiftAudioUnitViewController: AUViewController, AUAudioUnitFa
     private func showControls(for unit: SwiftAudioUnit) {
         view.subviews.forEach { $0.removeFromSuperview() }
         let host = NSHostingView(rootView: PluginControls(model: ParameterModel(unit: unit)))
+        host.appearance = NSAppearance(named: .darkAqua)
         host.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(host)
         NSLayoutConstraint.activate([
@@ -50,6 +51,13 @@ private final class ParameterModel: ObservableObject {
         })
     }
     deinit { if let token { unit.parameterTree?.removeParameterObserver(token) } }
+    func refreshAutomation() {
+        // Scheduled render events update atomic values without calling UI observers on the audio thread.
+        for parameter in unit.parameterTree!.allParameters {
+            let current = parameter.value
+            if values[parameter.address] != current { values[parameter.address] = current }
+        }
+    }
     func binding(_ spec: ParameterSpec) -> Binding<Float> {
         Binding(get: { self.values[spec.address] ?? spec.initial }, set: { value in
             let bounded = spec.bounded(value)
@@ -82,7 +90,7 @@ private struct PluginControls: View {
             Divider()
             Picker("Processor", selection: $selected) {
                 ForEach(ParameterSpec.groups.dropFirst(), id: \.self) { Text($0).tag($0) }
-            }.pickerStyle(.segmented)
+            }.pickerStyle(.segmented).labelsHidden()
             ScrollView {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 30), GridItem(.flexible())], spacing: 18) {
                     ForEach(ParameterSpec.all.filter { $0.group == selected }, id: \.address) { spec in
@@ -101,7 +109,11 @@ private struct PluginControls: View {
         .frame(minWidth: 620, minHeight: 460)
         .background(Color(red: 0.07, green: 0.09, blue: 0.12))
         .tint(accent)
+        .environment(\.colorScheme, .dark)
         .preferredColorScheme(.dark)
+        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
+            model.refreshAutomation()
+        }
     }
     @ViewBuilder private func parameterRow(_ spec: ParameterSpec) -> some View {
         if spec.unit == .boolean {

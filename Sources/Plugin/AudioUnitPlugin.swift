@@ -21,7 +21,8 @@ public final class SwiftAudioUnit: AUAudioUnit {
     private var inputs: AUAudioUnitBusArray!
     private var outputs: AUAudioUnitBusArray!
     private var tree: AUParameterTree!
-    private var renderState: RenderState?
+    private let resources = RenderResources()
+    private var selectedPreset: AUAudioUnitPreset?
 
     public override init(componentDescription: AudioComponentDescription,
                          options: AudioComponentInstantiationOptions = []) throws {
@@ -51,6 +52,7 @@ public final class SwiftAudioUnit: AUAudioUnit {
             store.set(spec.address, spec.bounded(value))
         }
         tree.implementorValueProvider = { parameter in store.get(parameter.address) }
+        selectedPreset = factoryPresets?.first
     }
 
     public override var parameterTree: AUParameterTree? {
@@ -60,10 +62,16 @@ public final class SwiftAudioUnit: AUAudioUnit {
     public override var inputBusses: AUAudioUnitBusArray { inputs }
     public override var outputBusses: AUAudioUnitBusArray { outputs }
     public override var channelCapabilities: [NSNumber]? { [1, 1, 2, 2] }
-    public override var canProcessInPlace: Bool { true }
+    public override var canProcessInPlace: Bool { false }
     public override var latency: TimeInterval { 0 }
-    // Conservative bound for delay feedback at its maximum setting.
-    public override var tailTime: TimeInterval { 180 }
+    public override var tailTime: TimeInterval {
+        guard !shouldBypassEffect else { return 0 }
+        let reverbTail: Double = values.get(24) >= 0.5 && values.get(22) > 0 ? 60 : 0
+        guard values.get(35) >= 0.5, values.get(33) > 0 else { return reverbTail }
+        let feedback = Double(max(0.001, values.get(32)))
+        let repeats = ceil(log(0.000001) / log(feedback)) + 1
+        return max(reverbTail, repeats * Double(max(values.get(30), values.get(31))) / 1000)
+    }
     public override var shouldBypassEffect: Bool {
         get { values.get(2) >= 0.5 }
         set { tree.parameter(withAddress: 2)?.value = newValue ? 1 : 0 }
@@ -78,15 +86,43 @@ public final class SwiftAudioUnit: AUAudioUnit {
         }
         let state = try RenderState(format: format, capacity: maximumFramesToRender, values: values)
         try super.allocateRenderResources()
-        renderState = state
+        resources.state = state
     }
     public override func deallocateRenderResources() {
-        renderState = nil
+        resources.state = nil
         super.deallocateRenderResources()
     }
     public override func reset() {
         super.reset()
-        renderState?.reset()
+        resources.state?.reset()
+    }
+
+    public override var factoryPresets: [AUAudioUnitPreset]? {
+        ["Default", "Warm Vocal", "Punchy Drums", "Ambient Pad"].enumerated().map { index, name in
+            let preset = AUAudioUnitPreset()
+            preset.number = index
+            preset.name = name
+            return preset
+        }
+    }
+    public override var currentPreset: AUAudioUnitPreset? {
+        get { selectedPreset }
+        set {
+            guard let preset = newValue else { selectedPreset = nil; return }
+            if preset.number >= 0 {
+                guard preset.number < 4 else { return }
+                for spec in ParameterSpec.all { tree.parameter(withAddress: spec.address)?.value = spec.initial }
+                let overrides: [AUParameterAddress: Float]
+                switch preset.number {
+                case 1: overrides = [10: -18, 11: 3, 22: 0.15, 33: 0.05]
+                case 2: overrides = [10: -15, 11: 6, 12: 5, 22: 0.1, 33: 0]
+                case 3: overrides = [20: 0.8, 22: 0.4, 33: 0.3, 32: 0.5]
+                default: overrides = [:]
+                }
+                for (address, value) in overrides { tree.parameter(withAddress: address)?.value = value }
+            }
+            selectedPreset = preset
+        }
     }
 
     public override var fullState: [String: Any]? {
@@ -111,10 +147,10 @@ public final class SwiftAudioUnit: AUAudioUnit {
     }
 
     public override var internalRenderBlock: AUInternalRenderBlock {
-        guard let state = renderState else {
-            return { _, _, _, _, _, _, _ in kAudioUnitErr_Uninitialized }
-        }
+        // Hosts may cache this block before allocating resources (including AUHostingService).
+        let resources = self.resources
         return { flags, timestamp, frameCount, bus, output, events, pull in
+            guard let state = resources.state else { return kAudioUnitErr_Uninitialized }
             guard bus == 0 else { return kAudioUnitErr_InvalidElement }
             guard frameCount <= state.capacity else { return kAudioUnitErr_TooManyFramesToProcess }
             guard let pull else { return kAudioUnitErr_NoConnection }
@@ -125,22 +161,23 @@ public final class SwiftAudioUnit: AUAudioUnit {
                 if buffers[channel].mData == nil {
                     buffers[channel].mData = UnsafeMutableRawPointer(state.output.floatChannelData![channel])
                 } else if buffers[channel].mDataByteSize < frameCount * 4 {
-                    return kAudioUnitErr_ParamError
+                    return kAudio_ParamError
                 }
                 buffers[channel].mDataByteSize = frameCount * 4
             }
             // Restore our owned pointers: an upstream AU is allowed to substitute its own buffers.
+            state.input.frameLength = frameCount
             let inputBuffers = UnsafeMutableAudioBufferListPointer(state.input.mutableAudioBufferList)
             for channel in 0..<state.channels {
                 inputBuffers[channel].mData = UnsafeMutableRawPointer(state.inputPointers[channel])
                 inputBuffers[channel].mDataByteSize = frameCount * 4
             }
             var inputFlags = AudioUnitRenderActionFlags()
-            let status = pull(&inputFlags, timestamp, frameCount, 0, state.input.mutableAudioBufferList)
+            let status = pull(&inputFlags, timestamp, frameCount, 0, inputBuffers.unsafeMutablePointer)
             guard status == noErr else { return status }
             for channel in 0..<state.channels {
                 guard inputBuffers[channel].mData != nil,
-                      inputBuffers[channel].mDataByteSize >= frameCount * 4 else { return kAudioUnitErr_ParamError }
+                      inputBuffers[channel].mDataByteSize >= frameCount * 4 else { return kAudio_ParamError }
             }
             state.syncParameters()
             var event = events
@@ -165,6 +202,11 @@ public final class SwiftAudioUnit: AUAudioUnit {
             return noErr
         }
     }
+}
+
+/// Resource changes are serialized against rendering by the AU allocation contract.
+private final class RenderResources {
+    var state: RenderState?
 }
 
 /// The engine and all scratch memory belong exclusively to the render thread after allocation.
