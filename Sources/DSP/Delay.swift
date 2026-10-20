@@ -116,8 +116,8 @@ public class StereoDelay: BaseAudioProcessor, PlatformObservable {
     }
     
     public override func reset() {
-        bufferL = [Float](repeating: 0.0, count: maxDelaySamples)
-        bufferR = [Float](repeating: 0.0, count: maxDelaySamples)
+        for index in bufferL.indices { bufferL[index] = 0 }
+        for index in bufferR.indices { bufferR[index] = 0 }
         writeIndexL = 0
         writeIndexR = 0
         hcStateL = 0.0

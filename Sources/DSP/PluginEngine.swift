@@ -244,7 +244,7 @@ public class PluginEngine: PlatformObservable {
         
         // Apply input gain
         let inGainLinear = AudioUtils.dBToLinear(inputGain)
-        for i in 0..<buffer.samples.count {
+        for i in 0..<(buffer.frameCount * buffer.channelCount) {
             buffer.samples[i] *= inGainLinear
         }
         
@@ -259,7 +259,7 @@ public class PluginEngine: PlatformObservable {
         
         // Apply output gain
         let outGainLinear = AudioUtils.dBToLinear(outputGain)
-        for i in 0..<buffer.samples.count {
+        for i in 0..<(buffer.frameCount * buffer.channelCount) {
             buffer.samples[i] *= outGainLinear
         }
         

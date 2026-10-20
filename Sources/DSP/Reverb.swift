@@ -35,7 +35,7 @@ class DelayLine {
     }
     
     func clear() {
-        buffer = [Float](repeating: 0.0, count: size)
+        for index in buffer.indices { buffer[index] = 0 }
         writeIndex = 0
     }
 }
@@ -160,7 +160,11 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
         let feedback = roomSize * 0.28 + 0.7
         let damp = damping
         
-        for comb in combsL + combsR {
+        for comb in combsL {
+            comb.setFeedback(feedback)
+            comb.setDamp(damp)
+        }
+        for comb in combsR {
             comb.setFeedback(feedback)
             comb.setDamp(damp)
         }
@@ -215,12 +219,10 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
     }
     
     public override func reset() {
-        for comb in combsL + combsR {
-            comb.clear()
-        }
-        for allpass in allpassL + allpassR {
-            allpass.clear()
-        }
+        for comb in combsL { comb.clear() }
+        for comb in combsR { comb.clear() }
+        for allpass in allpassL { allpass.clear() }
+        for allpass in allpassR { allpass.clear() }
         preDelayLine?.clear()
     }
 }

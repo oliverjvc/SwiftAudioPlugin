@@ -10,24 +10,33 @@ let package = Package(
         .iOS(.v16)
     ],
     products: [
+        .library(name: "AudioUnitPlugin", type: .dynamic, targets: ["AudioUnitPlugin"]),
         // Main executable for standalone testing
         .executable(
             name: "SwiftAudioPlugin",
-            targets: ["SwiftAudioPluginApp"]
+            targets: [
+        .target(name: "ParameterAtomics"),
+        .testTarget(name: "AudioUnitTests", dependencies: ["AudioUnitPlugin"], path: "Tests/AudioUnitTests"),"SwiftAudioPluginApp"]
         ),
         // DSP library (cross-platform)
         .library(
             name: "DSP",
-            targets: ["DSP"]
+            targets: [
+        .target(name: "ParameterAtomics"),
+        .testTarget(name: "AudioUnitTests", dependencies: ["AudioUnitPlugin"], path: "Tests/AudioUnitTests"),"DSP"]
         ),
         // UI library (SwiftUI-based)
         .library(
             name: "PluginUI",
-            targets: ["PluginUI"]
+            targets: [
+        .target(name: "ParameterAtomics"),
+        .testTarget(name: "AudioUnitTests", dependencies: ["AudioUnitPlugin"], path: "Tests/AudioUnitTests"),"PluginUI"]
         )
     ],
     dependencies: [],
     targets: [
+        .target(name: "ParameterAtomics"),
+        .testTarget(name: "AudioUnitTests", dependencies: ["AudioUnitPlugin"], path: "Tests/AudioUnitTests"),
         // DSP Core - Audio processing algorithms
         .target(
             name: "DSP",
@@ -43,7 +52,7 @@ let package = Package(
         // Audio Unit Plugin (macOS only)
         .target(
             name: "AudioUnitPlugin",
-            dependencies: ["DSP", "PluginUI"],
+            dependencies: ["DSP", "ParameterAtomics"],
             path: "Sources/Plugin"
         ),
         // Standalone application for testing
