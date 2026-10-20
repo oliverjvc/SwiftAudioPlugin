@@ -1,70 +1,79 @@
 // DSPTests.swift
 // Unit tests for DSP components
 
-import XCTest
+import Foundation
+import Testing
 @testable import DSP
 
-final class DSPTests: XCTestCase {
+struct DSPTests {
     
     let sampleRate: Double = 44100
     let frameCount = 512
     
     // MARK: - Audio Buffer Tests
     
+    @Test
     func testAudioBufferCreation() {
         let buffer = AudioBuffer(frameCount: 1024, channelCount: 2)
-        XCTAssertEqual(buffer.frameCount, 1024)
-        XCTAssertEqual(buffer.channelCount, 2)
-        XCTAssertEqual(buffer.samples.count, 2048)
+        #expect(buffer.frameCount == 1024)
+        #expect(buffer.channelCount == 2)
+        #expect(buffer.samples.count == 2048)
     }
     
+    @Test
     func testAudioBufferInitialization() {
         let samples: [Float] = [0.5, -0.5, 0.3, -0.3]
         let buffer = AudioBuffer(samples: samples, channelCount: 2)
-        XCTAssertEqual(buffer.frameCount, 2)
-        XCTAssertEqual(buffer.samples[0], 0.5)
+        #expect(buffer.frameCount == 2)
+        #expect(buffer.samples[0] == 0.5)
     }
     
     // MARK: - Audio Utils Tests
     
+    @Test
     func testDBToLinearConversion() {
-        XCTAssertEqual(AudioUtils.dBToLinear(0), 1.0, accuracy: 0.001)
-        XCTAssertEqual(AudioUtils.dBToLinear(-6), 0.501, accuracy: 0.01)
-        XCTAssertEqual(AudioUtils.dBToLinear(-20), 0.1, accuracy: 0.01)
+        #expect(abs(AudioUtils.dBToLinear(0) - 1.0) <= 0.001)
+        #expect(abs(AudioUtils.dBToLinear(-6) - 0.501) <= 0.01)
+        #expect(abs(AudioUtils.dBToLinear(-20) - 0.1) <= 0.01)
     }
     
+    @Test
     func testLinearToDBConversion() {
-        XCTAssertEqual(AudioUtils.linearToDB(1.0), 0.0, accuracy: 0.001)
-        XCTAssertEqual(AudioUtils.linearToDB(0.5), -6.02, accuracy: 0.1)
-        XCTAssertEqual(AudioUtils.linearToDB(0.1), -20.0, accuracy: 0.1)
+        #expect(abs(AudioUtils.linearToDB(1.0) - 0.0) <= 0.001)
+        #expect(abs(AudioUtils.linearToDB(0.5) - -6.02) <= 0.1)
+        #expect(abs(AudioUtils.linearToDB(0.1) - -20.0) <= 0.1)
     }
     
+    @Test
     func testSoftClip() {
         // Below threshold - no change
-        XCTAssertEqual(AudioUtils.softClip(0.5), 0.5, accuracy: 0.001)
+        #expect(abs(AudioUtils.softClip(0.5) - 0.5) <= 0.001)
         
         // Above threshold - clipped
         let clipped = AudioUtils.softClip(1.5)
-        XCTAssertLessThan(clipped, 1.5)
-        XCTAssertGreaterThan(clipped, 0.9)
+        #expect(clipped < 1.5)
+        #expect(clipped > 0.9)
     }
     
     // MARK: - EQ Tests
     
+    @Test
     func testEQBandCreation() {
         let band = EQBand(frequency: 1000, gain: 6, q: 1.5, type: .peak)
-        XCTAssertEqual(band.frequency, 1000)
-        XCTAssertEqual(band.gain, 6)
-        XCTAssertEqual(band.q, 1.5)
-        XCTAssertEqual(band.type, .peak)
+        #expect(band.frequency == 1000)
+        #expect(band.gain == 6)
+        #expect(band.q == 1.5)
+        #expect(band.type == .peak)
     }
     
+    @Test
     func testParametricEQCreation() {
         let eq = ParametricEQ(bandCount: 5, sampleRate: sampleRate)
-        XCTAssertEqual(eq.bands.count, 5)
-        XCTAssertTrue(eq.isEnabled)
+        #expect(eq.bands.count == 5)
+        #expect(eq.isEnabled)
     }
     
+    @Test
     func testEQProcessing() {
         let eq = ParametricEQ(bandCount: 3, sampleRate: sampleRate)
         eq.bands[1].gain = 6.0  // Boost mids
@@ -76,9 +85,10 @@ final class DSPTests: XCTestCase {
         let processedRMS = calculateRMS(buffer)
         
         // With boost, processed should be louder
-        XCTAssertGreaterThan(processedRMS, originalRMS)
+        #expect(processedRMS > originalRMS)
     }
     
+    @Test
     func testEQBypass() {
         let eq = ParametricEQ(bandCount: 3, sampleRate: sampleRate)
         eq.bands[1].gain = 12.0
@@ -90,19 +100,70 @@ final class DSPTests: XCTestCase {
         eq.process(&buffer)
         
         // When bypassed, samples should be unchanged
-        XCTAssertEqual(buffer.samples, originalSamples)
+        #expect(buffer.samples == originalSamples)
+    }
+
+    @Test
+    func testEQBandInitializesCoefficients() {
+        for type in EQBandType.allCases {
+            let band = EQBand(frequency: 1700, gain: 8, q: 1.7, type: type)
+            let reference = EQBand(frequency: 1700, gain: 8, q: 1.7, type: type)
+            reference.setSampleRate(sampleRate)
+            assertMatchingImpulseResponse(band, reference)
+        }
+    }
+
+    @Test
+    func testEQBandParameterChangesRefreshCoefficients() {
+        let changes: [(EQBand) -> Void] = [
+            { $0.frequency = 1700 },
+            { $0.gain = -8 },
+            { $0.q = 2.5 },
+            { $0.type = .highShelf }
+        ]
+
+        for change in changes {
+            let band = EQBand(frequency: 1000, gain: 6, q: 1, type: .peak)
+            band.setSampleRate(sampleRate)
+            // Preserve the filter history while changing its settings.
+            _ = band.processSample(left: 0.5, right: -0.5)
+            let reference = EQBand(frequency: 1000, gain: 6, q: 1, type: .peak)
+            reference.setSampleRate(sampleRate)
+            _ = reference.processSample(left: 0.5, right: -0.5)
+
+            change(band)
+            change(reference)
+            reference.updateCoefficients()
+            assertMatchingImpulseResponse(band, reference)
+        }
+    }
+
+    @Test
+    func testEQSampleRateChangeUpdatesBands() {
+        let eq = ParametricEQ(bandCount: 1, sampleRate: sampleRate)
+        eq.bands[0].frequency = 1700
+        eq.bands[0].gain = 8
+        eq.bands[0].q = 1.7
+        eq.bands[0].updateCoefficients()
+        eq.sampleRate = 96000
+
+        let reference = EQBand(frequency: 1700, gain: 8, q: 1.7)
+        reference.setSampleRate(96000)
+        assertMatchingImpulseResponse(eq.bands[0], reference)
     }
     
     // MARK: - Compressor Tests
     
+    @Test
     func testCompressorCreation() {
         let comp = Compressor(sampleRate: sampleRate)
-        XCTAssertEqual(comp.threshold, -20)
-        XCTAssertEqual(comp.ratio, 4)
-        XCTAssertEqual(comp.attack, 10)
-        XCTAssertEqual(comp.release, 100)
+        #expect(comp.threshold == -20)
+        #expect(comp.ratio == 4)
+        #expect(comp.attack == 10)
+        #expect(comp.release == 100)
     }
     
+    @Test
     func testCompressorGainReduction() {
         let comp = Compressor(sampleRate: sampleRate)
         comp.threshold = -20
@@ -116,9 +177,10 @@ final class DSPTests: XCTestCase {
         let processedPeak = buffer.samples.map { abs($0) }.max() ?? 0
         
         // Compressed signal should be quieter
-        XCTAssertLessThan(processedPeak, originalPeak)
+        #expect(processedPeak < originalPeak)
     }
     
+    @Test
     func testCompressorBelowThreshold() {
         let comp = Compressor(sampleRate: sampleRate)
         comp.threshold = -6
@@ -133,11 +195,12 @@ final class DSPTests: XCTestCase {
         let processedRMS = calculateRMS(buffer)
         
         // Should be mostly unchanged (allowing for numerical precision)
-        XCTAssertEqual(processedRMS, originalRMS, accuracy: 0.01)
+        #expect(abs(processedRMS - originalRMS) <= 0.01)
     }
     
     // MARK: - Limiter Tests
     
+    @Test
     func testLimiterCeiling() {
         let limiter = Limiter(sampleRate: sampleRate)
         limiter.ceiling = -3
@@ -150,18 +213,20 @@ final class DSPTests: XCTestCase {
         // All samples should be below ceiling
         let ceilingLinear = AudioUtils.dBToLinear(-3)
         let peak = buffer.samples.map { abs($0) }.max() ?? 0
-        XCTAssertLessThanOrEqual(peak, ceilingLinear + 0.01)
+        #expect(peak <= ceilingLinear + 0.01)
     }
     
     // MARK: - Delay Tests
     
+    @Test
     func testDelayCreation() {
         let delay = StereoDelay(sampleRate: sampleRate)
-        XCTAssertEqual(delay.delayTimeL, 250)
-        XCTAssertEqual(delay.delayTimeR, 250)
-        XCTAssertEqual(delay.feedback, 0.4)
+        #expect(delay.delayTimeL == 250)
+        #expect(delay.delayTimeR == 250)
+        #expect(delay.feedback == 0.4)
     }
     
+    @Test
     func testDelayProcessing() {
         let delay = StereoDelay(sampleRate: sampleRate)
         delay.delayTimeL = 100
@@ -178,18 +243,20 @@ final class DSPTests: XCTestCase {
         delay.process(&buffer)
         
         // Check that dry signal is present
-        XCTAssertGreaterThan(abs(buffer.samples[0]), 0.4)
+        #expect(abs(buffer.samples[0]) > 0.4)
     }
     
     // MARK: - Reverb Tests
     
+    @Test
     func testReverbCreation() {
         let reverb = Reverb(sampleRate: sampleRate)
-        XCTAssertEqual(reverb.roomSize, 0.5)
-        XCTAssertEqual(reverb.damping, 0.5)
-        XCTAssertEqual(reverb.width, 1.0)
+        #expect(reverb.roomSize == 0.5)
+        #expect(reverb.damping == 0.5)
+        #expect(reverb.width == 1.0)
     }
     
+    @Test
     func testReverbProcessing() {
         let reverb = Reverb(sampleRate: sampleRate)
         reverb.wetLevel = 0.5
@@ -204,19 +271,21 @@ final class DSPTests: XCTestCase {
         
         // Check that output contains signal (reverb produces output)
         let outputEnergy = buffer.samples.reduce(0) { $0 + abs($1) }
-        XCTAssertGreaterThan(outputEnergy, 0)
+        #expect(outputEnergy > 0)
     }
     
     // MARK: - Plugin Engine Tests
     
+    @Test
     func testPluginEngineCreation() {
         let engine = PluginEngine(sampleRate: sampleRate)
-        XCTAssertNotNil(engine.eq)
-        XCTAssertNotNil(engine.compressor)
-        XCTAssertNotNil(engine.delay)
-        XCTAssertNotNil(engine.reverb)
+        #expect(engine.eq.sampleRate == sampleRate)
+        #expect(engine.compressor.sampleRate == sampleRate)
+        #expect(engine.delay.sampleRate == sampleRate)
+        #expect(engine.reverb.sampleRate == sampleRate)
     }
     
+    @Test
     func testPluginEngineProcessing() {
         let engine = PluginEngine(sampleRate: sampleRate)
         
@@ -224,9 +293,10 @@ final class DSPTests: XCTestCase {
         engine.process(&buffer)
         
         // Engine should process without crash
-        XCTAssertEqual(buffer.frameCount, frameCount)
+        #expect(buffer.frameCount == frameCount)
     }
     
+    @Test
     func testPluginEngineBypass() {
         let engine = PluginEngine(sampleRate: sampleRate)
         engine.isBypassed = true
@@ -237,21 +307,36 @@ final class DSPTests: XCTestCase {
         engine.process(&buffer)
         
         // When bypassed, output should match input
-        XCTAssertEqual(buffer.samples, originalSamples)
+        #expect(buffer.samples == originalSamples)
     }
     
+    @Test
     func testPresetLoading() {
         let engine = PluginEngine(sampleRate: sampleRate)
         
-        XCTAssertGreaterThan(engine.presets.count, 0)
+        #expect(engine.presets.count > 0)
         
         if let preset = engine.presets.first {
             engine.loadPreset(preset)
-            XCTAssertEqual(engine.currentPreset?.name, preset.name)
+            #expect(engine.currentPreset?.name == preset.name)
         }
     }
     
     // MARK: - Helper Functions
+
+    private func assertMatchingImpulseResponse(
+        _ actual: EQBand,
+        _ reference: EQBand,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        for frame in 0..<128 {
+            let input: Float = frame == 0 ? 0.5 : 0
+            let expected = reference.processSample(left: input, right: -input)
+            let output = actual.processSample(left: input, right: -input)
+            #expect(abs(output.0 - expected.0) <= 0.000001, sourceLocation: sourceLocation)
+            #expect(abs(output.1 - expected.1) <= 0.000001, sourceLocation: sourceLocation)
+        }
+    }
     
     private func generateSineWave(frequency: Float, amplitude: Float) -> AudioBuffer {
         var buffer = AudioBuffer(frameCount: frameCount, channelCount: 2)

@@ -189,7 +189,9 @@ public struct MainPluginView: View {
     }
 }
 
-#Preview {
-    MainPluginView()
+private struct MainPluginViewPreviews: PreviewProvider {
+    static var previews: some View {
+        MainPluginView()
+    }
 }
 #endif

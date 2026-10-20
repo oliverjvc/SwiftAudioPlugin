@@ -215,9 +215,11 @@ public struct CompressorPanel: View {
     }
 }
 
-#Preview {
-    CompressorPanel(compressor: Compressor())
-        .frame(width: 600)
-        .background(PluginColors.backgroundMedium)
+private struct CompressorPanelPreviews: PreviewProvider {
+    static var previews: some View {
+        CompressorPanel(compressor: Compressor())
+            .frame(width: 600)
+            .background(PluginColors.backgroundMedium)
+    }
 }
 #endif

@@ -1,8 +1,8 @@
 import Foundation
-import XCTest
+import Testing
 @testable import DSP
 
-final class PresetSerializationTests: XCTestCase {
+struct PresetSerializationTests {
     // Independent fixture: every persisted setting differs from its default.
     private let completeJSON = """
     {
@@ -59,23 +59,25 @@ final class PresetSerializationTests: XCTestCase {
     }
     """
 
+    @Test
     func testJSONRoundTripPreservesEveryField() throws {
         let original = Data(completeJSON.utf8)
         let decoded = try JSONDecoder().decode(PluginPreset.self, from: original)
         let encoded = try JSONEncoder().encode(decoded)
-        XCTAssertEqual(try jsonObject(encoded), try jsonObject(original))
+        #expect(try jsonObject(encoded) == jsonObject(original))
         let roundTrip = try JSONDecoder().decode(PluginPreset.self, from: encoded)
-        XCTAssertEqual(try jsonObject(JSONEncoder().encode(roundTrip)), try jsonObject(original))
+        #expect(try jsonObject(JSONEncoder().encode(roundTrip)) == jsonObject(original))
     }
 
+    @Test
     func testPropertyListRoundTrip() throws {
         let preset = try completePreset()
         let encoded = try PropertyListEncoder().encode(preset)
         let decoded = try PropertyListDecoder().decode(PluginPreset.self, from: encoded)
-        XCTAssertEqual(try jsonObject(JSONEncoder().encode(decoded)),
-                       try jsonObject(Data(completeJSON.utf8)))
+        #expect(try jsonObject(JSONEncoder().encode(decoded)) == jsonObject(Data(completeJSON.utf8)))
     }
 
+    @Test
     func testLoadAppliesEverySettingAndPreservesRuntimeState() throws {
         let engine = PluginEngine(sampleRate: 48000)
         let existingBand = engine.eq.bands[0]
@@ -86,124 +88,125 @@ final class PresetSerializationTests: XCTestCase {
         let count = engine.presets.count
         engine.loadPreset(preset)
 
-        XCTAssertEqual(engine.currentPreset?.id, preset.id)
-        XCTAssertEqual(engine.presets.count, count)
-        XCTAssertTrue(engine.isBypassed)
-        XCTAssertEqual(engine.sampleRate, 48000)
-        XCTAssertEqual(engine.inputLevelL, -12)
-        XCTAssertEqual(engine.outputLevelR, -15)
-        XCTAssertEqual(engine.inputGain, -4.5)
-        XCTAssertEqual(engine.outputGain, 2.5)
-        XCTAssertTrue(engine.eq.bands[0] === existingBand)
-        XCTAssertEqual(engine.eq.bands.count, 6)
-        XCTAssertEqual(engine.eq.outputGain, -2)
-        XCTAssertFalse(engine.eq.isEnabled)
+        #expect(engine.currentPreset?.id == preset.id)
+        #expect(engine.presets.count == count)
+        #expect(engine.isBypassed)
+        #expect(engine.sampleRate == 48000)
+        #expect(engine.inputLevelL == -12)
+        #expect(engine.outputLevelR == -15)
+        #expect(engine.inputGain == -4.5)
+        #expect(engine.outputGain == 2.5)
+        #expect(engine.eq.bands[0] === existingBand)
+        #expect(engine.eq.bands.count == 6)
+        #expect(engine.eq.outputGain == -2)
+        #expect(!engine.eq.isEnabled)
         for (index, band) in engine.eq.bands.enumerated() {
             let expected = preset.eqSettings.bands[index]
-            XCTAssertEqual(band.frequency, expected.frequency)
-            XCTAssertEqual(band.gain, expected.gain)
-            XCTAssertEqual(band.q, expected.q)
-            XCTAssertEqual(band.type.rawValue, expected.type)
-            XCTAssertEqual(band.isEnabled, preset.eqSettings.bandEnabled[index])
+            #expect(band.frequency == expected.frequency)
+            #expect(band.gain == expected.gain)
+            #expect(band.q == expected.q)
+            #expect(band.type.rawValue == expected.type)
+            #expect(band.isEnabled == preset.eqSettings.bandEnabled[index])
         }
-        XCTAssertEqual(engine.compressor.threshold, -27)
-        XCTAssertEqual(engine.compressor.ratio, 7)
-        XCTAssertEqual(engine.compressor.attack, 3)
-        XCTAssertEqual(engine.compressor.release, 240)
-        XCTAssertEqual(engine.compressor.makeupGain, 4)
-        XCTAssertEqual(engine.compressor.knee, 9)
-        XCTAssertFalse(engine.compressor.isEnabled)
-        XCTAssertEqual(engine.reverb.roomSize, 0.8)
-        XCTAssertEqual(engine.reverb.damping, 0.2)
-        XCTAssertEqual(engine.reverb.width, 0.6)
-        XCTAssertEqual(engine.reverb.wetLevel, 0.4)
-        XCTAssertEqual(engine.reverb.dryLevel, 0.5)
-        XCTAssertEqual(engine.reverb.preDelay, 35)
-        XCTAssertFalse(engine.reverb.isEnabled)
-        XCTAssertEqual(engine.delay.delayTimeL, 375)
-        XCTAssertEqual(engine.delay.delayTimeR, 625)
-        XCTAssertEqual(engine.delay.feedback, 0.6)
-        XCTAssertEqual(engine.delay.wetLevel, 0.5)
-        XCTAssertEqual(engine.delay.dryLevel, 0.8)
-        XCTAssertTrue(engine.delay.pingPong)
-        XCTAssertFalse(engine.delay.isEnabled)
-        XCTAssertEqual(engine.delay.highCut, 6500)
-        XCTAssertEqual(engine.delay.lowCut, 180)
-        XCTAssertEqual(engine.delay.tempo, 95)
-        XCTAssertTrue(engine.delay.syncEnabled)
-        XCTAssertEqual(engine.delay.syncDivisionL, 0.125)
-        XCTAssertEqual(engine.delay.syncDivisionR, 0.5)
-        XCTAssertEqual(engine.limiter.ceiling, -1.5)
-        XCTAssertEqual(engine.limiter.release, 125)
-        XCTAssertFalse(engine.limiter.isEnabled)
+        #expect(engine.compressor.threshold == -27)
+        #expect(engine.compressor.ratio == 7)
+        #expect(engine.compressor.attack == 3)
+        #expect(engine.compressor.release == 240)
+        #expect(engine.compressor.makeupGain == 4)
+        #expect(engine.compressor.knee == 9)
+        #expect(!engine.compressor.isEnabled)
+        #expect(engine.reverb.roomSize == 0.8)
+        #expect(engine.reverb.damping == 0.2)
+        #expect(engine.reverb.width == 0.6)
+        #expect(engine.reverb.wetLevel == 0.4)
+        #expect(engine.reverb.dryLevel == 0.5)
+        #expect(engine.reverb.preDelay == 35)
+        #expect(!engine.reverb.isEnabled)
+        #expect(engine.delay.delayTimeL == 375)
+        #expect(engine.delay.delayTimeR == 625)
+        #expect(engine.delay.feedback == 0.6)
+        #expect(engine.delay.wetLevel == 0.5)
+        #expect(engine.delay.dryLevel == 0.8)
+        #expect(engine.delay.pingPong)
+        #expect(!engine.delay.isEnabled)
+        #expect(engine.delay.highCut == 6500)
+        #expect(engine.delay.lowCut == 180)
+        #expect(engine.delay.tempo == 95)
+        #expect(engine.delay.syncEnabled)
+        #expect(engine.delay.syncDivisionL == 0.125)
+        #expect(engine.delay.syncDivisionR == 0.5)
+        #expect(engine.limiter.ceiling == -1.5)
+        #expect(engine.limiter.release == 125)
+        #expect(!engine.limiter.isEnabled)
     }
 
+    @Test
     func testSaveEncodeDecodeLoadRoundTrip() throws {
         let source = PluginEngine()
         let preset = try completePreset()
         source.loadPreset(preset)
         let count = source.presets.count
         let saved = source.saveCurrentAsPreset(name: preset.name, category: preset.category)
-        XCTAssertNotEqual(saved.id, preset.id)
-        XCTAssertEqual(source.presets.count, count + 1)
-        XCTAssertEqual(source.presets.last?.id, saved.id)
-        XCTAssertEqual(source.currentPreset?.id, saved.id)
+        #expect(saved.id != preset.id)
+        #expect(source.presets.count == count + 1)
+        #expect(source.presets.last?.id == saved.id)
+        #expect(source.currentPreset?.id == saved.id)
 
         var expected = preset
         expected.id = saved.id
-        XCTAssertEqual(try jsonObject(JSONEncoder().encode(saved)),
-                       try jsonObject(JSONEncoder().encode(expected)))
+        #expect(try jsonObject(JSONEncoder().encode(saved)) == jsonObject(JSONEncoder().encode(expected)))
         let decoded = try JSONDecoder().decode(PluginPreset.self, from: JSONEncoder().encode(saved))
         let destination = PluginEngine()
         destination.loadPreset(decoded)
         var resaved = destination.saveCurrentAsPreset(name: saved.name, category: saved.category)
         resaved.id = saved.id
-        XCTAssertEqual(try jsonObject(JSONEncoder().encode(resaved)),
-                       try jsonObject(JSONEncoder().encode(saved)))
+        #expect(try jsonObject(JSONEncoder().encode(resaved)) == jsonObject(JSONEncoder().encode(saved)))
 
         // A saved preset owns values, not live references to processors.
         source.eq.bands[0].gain = 12
         source.delay.tempo = 160
-        XCTAssertEqual(saved.eqSettings.bands[0].gain, 3)
-        XCTAssertEqual(saved.delaySettings.tempo, 95)
+        #expect(saved.eqSettings.bands[0].gain == 3)
+        #expect(saved.delaySettings.tempo == 95)
     }
 
+    @Test
     func testLegacyPresetDefaultsAndReencoding() throws {
         let preset = try JSONDecoder().decode(PluginPreset.self, from: Data(legacyJSON.utf8))
-        XCTAssertEqual(preset.name, "Legacy")
-        XCTAssertEqual(preset.eqSettings.bands.map { $0.frequency }, [80, 250, 1000, 4000, 12000])
-        XCTAssertTrue(preset.eqSettings.bands.allSatisfy { $0.gain == 0 && $0.q == 1 })
-        XCTAssertEqual(preset.inputGain, 0)
-        XCTAssertEqual(preset.outputGain, 0)
-        XCTAssertEqual(preset.delaySettings.highCut, 8000)
-        XCTAssertEqual(preset.delaySettings.lowCut, 100)
-        XCTAssertEqual(preset.delaySettings.tempo, 120)
-        XCTAssertFalse(preset.delaySettings.syncEnabled)
-        XCTAssertEqual(preset.delaySettings.syncDivisionL, 0.25)
-        XCTAssertEqual(preset.delaySettings.syncDivisionR, 0.25)
-        XCTAssertEqual(preset.limiterSettings.ceiling, -0.3)
-        XCTAssertEqual(preset.limiterSettings.release, 50)
-        XCTAssertTrue(preset.limiterSettings.isEnabled)
+        #expect(preset.name == "Legacy")
+        #expect(preset.eqSettings.bands.map { $0.frequency } == [80, 250, 1000, 4000, 12000])
+        #expect(preset.eqSettings.bands.allSatisfy { $0.gain == 0 && $0.q == 1 })
+        #expect(preset.inputGain == 0)
+        #expect(preset.outputGain == 0)
+        #expect(preset.delaySettings.highCut == 8000)
+        #expect(preset.delaySettings.lowCut == 100)
+        #expect(preset.delaySettings.tempo == 120)
+        #expect(!preset.delaySettings.syncEnabled)
+        #expect(preset.delaySettings.syncDivisionL == 0.25)
+        #expect(preset.delaySettings.syncDivisionR == 0.25)
+        #expect(preset.limiterSettings.ceiling == -0.3)
+        #expect(preset.limiterSettings.release == 50)
+        #expect(preset.limiterSettings.isEnabled)
         let engine = PluginEngine()
         engine.loadPreset(try completePreset())
         engine.loadPreset(preset)
-        XCTAssertEqual(engine.eq.bands.count, 5)
-        XCTAssertTrue(engine.eq.bands.allSatisfy { $0.type == .peak && $0.isEnabled })
-        XCTAssertEqual(engine.eq.outputGain, -3)
-        XCTAssertFalse(engine.eq.isEnabled)
-        XCTAssertEqual(engine.inputGain, 0)
-        XCTAssertEqual(engine.outputGain, 0)
-        XCTAssertEqual(engine.compressor.threshold, -18)
-        XCTAssertEqual(engine.compressor.knee, 8)
-        XCTAssertTrue(engine.compressor.isEnabled)
-        XCTAssertTrue(engine.reverb.isEnabled)
-        XCTAssertTrue(engine.delay.isEnabled)
-        XCTAssertTrue(engine.limiter.isEnabled)
+        #expect(engine.eq.bands.count == 5)
+        #expect(engine.eq.bands.allSatisfy { $0.type == .peak && $0.isEnabled })
+        #expect(engine.eq.outputGain == -3)
+        #expect(!engine.eq.isEnabled)
+        #expect(engine.inputGain == 0)
+        #expect(engine.outputGain == 0)
+        #expect(engine.compressor.threshold == -18)
+        #expect(engine.compressor.knee == 8)
+        #expect(engine.compressor.isEnabled)
+        #expect(engine.reverb.isEnabled)
+        #expect(engine.delay.isEnabled)
+        #expect(engine.limiter.isEnabled)
         let encoded = try JSONEncoder().encode(preset)
         let decoded = try JSONDecoder().decode(PluginPreset.self, from: encoded)
-        XCTAssertEqual(try jsonObject(JSONEncoder().encode(decoded)), try jsonObject(encoded))
+        #expect(try jsonObject(JSONEncoder().encode(decoded)) == jsonObject(encoded))
     }
 
+    @Test
     func testBandCompatibilityAndEmptyBands() throws {
         let json = """
         {"outputGain": 0, "isEnabled": true, "bands": [
@@ -213,30 +216,32 @@ final class PresetSerializationTests: XCTestCase {
         """
         var preset = PluginPreset(name: "Compatibility")
         preset.eqSettings = try JSONDecoder().decode(EQPresetData.self, from: Data(json.utf8))
-        XCTAssertEqual(preset.eqSettings.bandEnabled, [true, true])
+        #expect(preset.eqSettings.bandEnabled == [true, true])
         let engine = PluginEngine()
         engine.loadPreset(preset)
-        XCTAssertEqual(engine.eq.bands.map { $0.type }, [.peak, .peak])
+        #expect(engine.eq.bands.map { $0.type } == [.peak, .peak])
         // An explicitly empty array is distinct from the missing legacy field.
         preset.eqSettings.bands = []
         let encoded = try JSONEncoder().encode(preset)
         let decoded = try JSONDecoder().decode(PluginPreset.self, from: encoded)
-        XCTAssertTrue(decoded.eqSettings.bands.isEmpty)
-        XCTAssertTrue(decoded.eqSettings.bandEnabled.isEmpty)
+        #expect(decoded.eqSettings.bands.isEmpty)
+        #expect(decoded.eqSettings.bandEnabled.isEmpty)
         engine.loadPreset(decoded)
-        XCTAssertTrue(engine.eq.bands.isEmpty)
+        #expect(engine.eq.bands.isEmpty)
     }
 
+    @Test
     func testTupleAPIWithMissingEnabledEntries() throws {
         var settings = EQPresetData()
         settings.bands = [(400, 2, 1.2, "Peak"), (3000, -3, 2, "Notch")]
         settings.bandEnabled = [false]
         let decoded = try JSONDecoder().decode(EQPresetData.self, from: JSONEncoder().encode(settings))
-        XCTAssertEqual(decoded.bandEnabled, [false, true])
-        XCTAssertEqual(decoded.bands.count, 2)
-        XCTAssertEqual(decoded.bands[1].type, "Notch")
+        #expect(decoded.bandEnabled == [false, true])
+        #expect(decoded.bands.count == 2)
+        #expect(decoded.bands[1].type == "Notch")
     }
 
+    @Test
     func testLoadedEQCoefficientsUseDestinationSampleRate() throws {
         for rate in [44100.0, 48000.0, 96000.0, 192000.0] {
             for type in EQBandType.allCases {
@@ -251,13 +256,14 @@ final class PresetSerializationTests: XCTestCase {
                     let input: Float = frame == 0 ? 0.5 : 0
                     let expected = reference.processSample(left: input, right: -input)
                     let actual = engine.eq.bands[0].processSample(left: input, right: -input)
-                    XCTAssertEqual(actual.0, expected.0, accuracy: 0.000001)
-                    XCTAssertEqual(actual.1, expected.1, accuracy: 0.000001)
+                    #expect(abs(actual.0 - expected.0) <= 0.000001)
+                    #expect(abs(actual.1 - expected.1) <= 0.000001)
                 }
             }
         }
     }
 
+    @Test
     func testMalformedValuesAreNotSilentlyDefaulted() throws {
         let invalidGain = completeJSON.replacingOccurrences(of: "\"inputGain\": -4.5",
                                                            with: "\"inputGain\": \"bad\"")
@@ -266,7 +272,9 @@ final class PresetSerializationTests: XCTestCase {
         let invalidBand = completeJSON.replacingOccurrences(of: "\"q\": 0.7",
                                                            with: "\"q\": \"bad\"")
         for json in [invalidGain, invalidDelay, invalidBand] {
-            XCTAssertThrowsError(try JSONDecoder().decode(PluginPreset.self, from: Data(json.utf8)))
+            #expect(throws: (any Error).self) {
+                try JSONDecoder().decode(PluginPreset.self, from: Data(json.utf8))
+            }
         }
     }
 
@@ -275,6 +283,6 @@ final class PresetSerializationTests: XCTestCase {
     }
 
     private func jsonObject(_ data: Data) throws -> NSDictionary {
-        try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
+        try #require(JSONSerialization.jsonObject(with: data) as? NSDictionary)
     }
 }

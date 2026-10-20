@@ -28,7 +28,8 @@ Professional audio plugin similar to Waves Audio plugins, built entirely in Swif
 
 ### macOS (Primary Platform)
 - macOS 13.0+ (Ventura or later)
-- Xcode 15+ with Swift 5.9
+- Swift 5.9+ for building, from Xcode or Apple Command Line Tools
+- Swift 6+ for the Swift Testing test suite
 - Apple Silicon (M1/M2) or Intel Mac
 
 ### Windows (Testing/Development)
@@ -42,14 +43,14 @@ Professional audio plugin similar to Waves Audio plugins, built entirely in Swif
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd Plugin
+git clone https://github.com/oliverjvc/SwiftAudioPlugin.git
+cd SwiftAudioPlugin
 
 # Build the project
 swift build
 
 # Run tests
-swift test
+bash scripts/test.sh
 
 # Run standalone app (macOS with GUI, Windows console mode)
 swift run
@@ -180,9 +181,25 @@ Save and load your own presets through the preset manager.
 
 ### Running Tests
 
+The test suite uses Swift Testing and requires Swift 6 or newer. On macOS
+with Command Line Tools, use the wrapper to locate the bundled testing
+framework and its runtime libraries:
+
+```bash
+bash scripts/test.sh
+```
+
+The wrapper runs `swift test` with the necessary search paths and forwards
+additional arguments, such as `--filter testEQ`. With a toolchain that already
+provides those paths (such as a full Xcode installation), run directly:
+
 ```bash
 swift test
 ```
+
+The bundled testing runtime may require a newer macOS version than the app's
+macOS 13 deployment target. The Command Line Tools runtime used for validation
+requires macOS 14 or newer; this does not change the app's deployment target.
 
 ### Code Style
 - Follow Swift API Design Guidelines

@@ -204,28 +204,30 @@ public struct SmallKnob: View {
     }
 }
 
-#Preview {
-    HStack(spacing: 20) {
-        Knob(
-            value: .constant(0.5),
-            range: 0...1,
-            label: "GAIN",
-            unit: " dB",
-            defaultValue: 0,
-            displayFormat: "%.1f"
-        )
+private struct KnobPreviews: PreviewProvider {
+    static var previews: some View {
+        HStack(spacing: 20) {
+            Knob(
+                value: .constant(0.5),
+                range: 0...1,
+                label: "GAIN",
+                unit: " dB",
+                defaultValue: 0,
+                displayFormat: "%.1f"
+            )
         
-        Knob(
-            value: .constant(-12.0),
-            range: -30...10,
-            label: "THRESHOLD",
-            unit: " dB",
-            defaultValue: -20,
-            displayFormat: "%.1f",
-            accentColor: PluginColors.accentSecondary
-        )
+            Knob(
+                value: .constant(-12.0),
+                range: -30...10,
+                label: "THRESHOLD",
+                unit: " dB",
+                defaultValue: -20,
+                displayFormat: "%.1f",
+                accentColor: PluginColors.accentSecondary
+            )
+        }
+        .padding()
+        .background(PluginColors.backgroundDark)
     }
-    .padding()
-    .background(PluginColors.backgroundDark)
 }
 #endif

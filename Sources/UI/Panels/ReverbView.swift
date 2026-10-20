@@ -171,9 +171,11 @@ public struct ReverbPanel: View {
     }
 }
 
-#Preview {
-    ReverbPanel(reverb: Reverb())
-        .frame(width: 550)
-        .background(PluginColors.backgroundMedium)
+private struct ReverbPanelPreviews: PreviewProvider {
+    static var previews: some View {
+        ReverbPanel(reverb: Reverb())
+            .frame(width: 550)
+            .background(PluginColors.backgroundMedium)
+    }
 }
 #endif

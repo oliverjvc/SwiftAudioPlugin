@@ -264,25 +264,27 @@ public struct ActionButton: View {
     }
 }
 
-#Preview {
-    VStack(spacing: 20) {
-        HStack {
-            ToggleButton(isOn: .constant(true), label: "EQ")
-            ToggleButton(isOn: .constant(false), label: "COMP")
-            BypassButton(isBypassed: .constant(false))
-        }
+private struct ButtonsPreviews: PreviewProvider {
+    static var previews: some View {
+        VStack(spacing: 20) {
+            HStack {
+                ToggleButton(isOn: .constant(true), label: "EQ")
+                ToggleButton(isOn: .constant(false), label: "COMP")
+                BypassButton(isBypassed: .constant(false))
+            }
         
-        PresetSelector(
-            selectedPreset: .constant("Warm Vocal"),
-            presets: ["Init", "Warm Vocal", "Punchy Drums"]
-        )
+            PresetSelector(
+                selectedPreset: .constant("Warm Vocal"),
+                presets: ["Init", "Warm Vocal", "Punchy Drums"]
+            )
         
-        HStack {
-            ActionButton(label: "Save", icon: "square.and.arrow.down", style: .primary) {}
-            ActionButton(label: "A/B", style: .secondary) {}
+            HStack {
+                ActionButton(label: "Save", icon: "square.and.arrow.down", style: .primary) {}
+                ActionButton(label: "A/B", style: .secondary) {}
+            }
         }
+        .padding()
+        .background(PluginColors.backgroundMedium)
     }
-    .padding()
-    .background(PluginColors.backgroundMedium)
 }
 #endif

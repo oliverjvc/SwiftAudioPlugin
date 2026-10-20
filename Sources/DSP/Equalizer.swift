@@ -18,10 +18,10 @@ public enum EQBandType: String, CaseIterable, Codable {
 
 /// Single EQ band with biquad filter
 public class EQBand: PlatformObservable {
-    public var frequency: Float = 1000.0  // Hz
-    public var gain: Float = 0.0          // dB
-    public var q: Float = 1.0             // Q factor
-    public var type: EQBandType = .peak
+    public var frequency: Float = 1000.0 { didSet { updateCoefficients() } }  // Hz
+    public var gain: Float = 0.0 { didSet { updateCoefficients() } }          // dB
+    public var q: Float = 1.0 { didSet { updateCoefficients() } }             // Q factor
+    public var type: EQBandType = .peak { didSet { updateCoefficients() } }
     public var isEnabled: Bool = true
     
     // Biquad filter coefficients
@@ -44,6 +44,7 @@ public class EQBand: PlatformObservable {
         self.gain = gain
         self.q = q
         self.type = type
+        updateCoefficients()
     }
     
     public func setSampleRate(_ rate: Double) {
@@ -150,6 +151,13 @@ public class EQBand: PlatformObservable {
 public class ParametricEQ: BaseAudioProcessor, PlatformObservable {
     public var bands: [EQBand]
     public var outputGain: Float = 0.0  // dB
+    public override var sampleRate: Double {
+        didSet {
+            for band in bands {
+                band.setSampleRate(sampleRate)
+            }
+        }
+    }
     
     public init(bandCount: Int = 5, sampleRate: Double = 44100.0) {
         // Default frequency distribution

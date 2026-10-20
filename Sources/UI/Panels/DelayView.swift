@@ -275,9 +275,11 @@ public struct DelayPanel: View {
     }
 }
 
-#Preview {
-    DelayPanel(delay: StereoDelay())
-        .frame(width: 600)
-        .background(PluginColors.backgroundMedium)
+private struct DelayPanelPreviews: PreviewProvider {
+    static var previews: some View {
+        DelayPanel(delay: StereoDelay())
+            .frame(width: 600)
+            .background(PluginColors.backgroundMedium)
+    }
 }
 #endif

@@ -245,13 +245,15 @@ public struct SpectrumMeter: View {
     }
 }
 
-#Preview {
-    HStack(spacing: 30) {
-        StereoMeter(leftLevel: -12, rightLevel: -18, label: "INPUT")
-        GainReductionMeter(reduction: 6)
-        StereoMeter(leftLevel: -6, rightLevel: -9, label: "OUTPUT")
+private struct MeterPreviews: PreviewProvider {
+    static var previews: some View {
+        HStack(spacing: 30) {
+            StereoMeter(leftLevel: -12, rightLevel: -18, label: "INPUT")
+            GainReductionMeter(reduction: 6)
+            StereoMeter(leftLevel: -6, rightLevel: -9, label: "OUTPUT")
+        }
+        .padding()
+        .background(PluginColors.backgroundMedium)
     }
-    .padding()
-    .background(PluginColors.backgroundMedium)
 }
 #endif

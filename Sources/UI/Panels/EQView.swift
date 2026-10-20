@@ -319,9 +319,11 @@ struct EQBandControl: View {
     }
 }
 
-#Preview {
-    EQPanel(eq: ParametricEQ())
-        .frame(width: 600)
-        .background(PluginColors.backgroundMedium)
+private struct EQPanelPreviews: PreviewProvider {
+    static var previews: some View {
+        EQPanel(eq: ParametricEQ())
+            .frame(width: 600)
+            .background(PluginColors.backgroundMedium)
+    }
 }
 #endif
