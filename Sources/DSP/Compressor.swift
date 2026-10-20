@@ -49,10 +49,10 @@ public class Compressor: BaseAudioProcessor, PlatformObservable {
             // Above knee - full compression
             return (threshold - inputDB) * (1.0 - 1.0 / ratio)
         } else {
-            // In knee region - interpolate
-            let kneeRatio = (inputDB - kneeStart) / knee
-            let compression = (threshold - inputDB) * (1.0 - 1.0 / ratio) * kneeRatio * kneeRatio
-            return compression
+            // Quadratic knee matches both the value and slope of the two straight
+            // segments. Gain reduction must never become positive below threshold.
+            let distance = inputDB - kneeStart
+            return (1.0 / ratio - 1.0) * distance * distance / (2.0 * knee)
         }
     }
     
@@ -97,12 +97,12 @@ public class Compressor: BaseAudioProcessor, PlatformObservable {
             }
             
             // Track output and gain reduction
-            peakOutput = max(peakOutput, abs(buffer.samples[leftIdx]))
+            peakOutput = max(peakOutput, max(abs(left), abs(right)) * gainLinear)
             maxGainReduction = min(maxGainReduction, envelope)
         }
         
         // Update meters with smoothing
-        let meterSmooth: Float = 0.9
+        let meterSmooth = expf(-Float(buffer.frameCount) / (Float(sampleRate) * 0.1))
         inputLevel = meterSmooth * inputLevel + (1.0 - meterSmooth) * AudioUtils.linearToDB(peakInput)
         outputLevel = meterSmooth * outputLevel + (1.0 - meterSmooth) * AudioUtils.linearToDB(peakOutput)
         gainReduction = meterSmooth * gainReduction + (1.0 - meterSmooth) * (-maxGainReduction)
@@ -173,7 +173,8 @@ public class Limiter: BaseAudioProcessor, PlatformObservable {
             maxGR = min(maxGR, AudioUtils.linearToDB(envelope))
         }
         
-        gainReduction = 0.9 * gainReduction + 0.1 * (-maxGR)
+        let smooth = expf(-Float(buffer.frameCount) / (Float(sampleRate) * 0.1))
+        gainReduction = smooth * gainReduction + (1 - smooth) * (-maxGR)
     }
     
     public override func reset() {

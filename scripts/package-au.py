@@ -1,18 +1,23 @@
-"""Package a native-architecture AUv3 using the macOS Command Line Tools.
+"""Package a native or cross-compiled AUv3 using the macOS Command Line Tools.
 
 The local development signature is ad hoc. Distribution requires an Apple
 Developer signing identity and notarization; this script does not publish.
 """
+import argparse
 import os
 from pathlib import Path
 import plistlib
 import shutil
 import subprocess
-import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-BIN = Path(sys.argv[1]).resolve()
-APP = ROOT / "Build" / "Swift Audio.app"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("binary_dir", type=Path)
+parser.add_argument("--arch", choices=["arm64", "x86_64"], default=os.uname().machine)
+parser.add_argument("--output-dir", type=Path, default=ROOT / "Build")
+args = parser.parse_args()
+BIN = args.binary_dir.resolve()
+APP = args.output_dir.resolve() / "Swift Audio.app"
 CONTENTS = APP / "Contents"
 FRAMEWORK = CONTENTS / "Frameworks" / "AudioUnitPlugin.framework"
 VERSION = FRAMEWORK / "Versions" / "A"
@@ -42,6 +47,7 @@ if APP.exists():
     shutil.rmtree(APP)
 for folder in [CONTENTS / "MacOS", VERSION / "Resources", EXT_CONTENTS / "MacOS"]:
     folder.mkdir(parents=True, exist_ok=True)
+run("lipo", BIN / "libAudioUnitPlugin.dylib", "-verify_arch", args.arch)
 shutil.copy2(BIN / "libAudioUnitPlugin.dylib", VERSION / "AudioUnitPlugin")
 (FRAMEWORK / "Versions" / "Current").symlink_to("A")
 (FRAMEWORK / "AudioUnitPlugin").symlink_to("Versions/Current/AudioUnitPlugin")
@@ -53,7 +59,7 @@ shutil.copy2(ROOT / "AudioPlugin" / "HostApp" / "Info.plist", CONTENTS / "Info.p
 shutil.copy2(ROOT / "AudioPlugin" / "Extension" / "Info.plist", EXT_CONTENTS / "Info.plist")
 
 sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
-arch = os.uname().machine
+arch = args.arch
 target = arch + "-apple-macosx13.0"
 frameworks = CONTENTS / "Frameworks"
 run("xcrun", "clang", "-target", target, "-isysroot", sdk,
@@ -67,6 +73,9 @@ run("xcrun", "swiftc", "-target", target, "-sdk", sdk, "-parse-as-library",
     "-F", frameworks, "-framework", "AudioUnitPlugin",
     "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks",
     "-o", CONTENTS / "MacOS" / "Swift Audio")
+for binary in [VERSION / "AudioUnitPlugin", CONTENTS / "MacOS" / "Swift Audio",
+               EXT_CONTENTS / "MacOS" / "SwiftAudioPluginExtension"]:
+    run("lipo", binary, "-verify_arch", args.arch)
 run("codesign", "--force", "--sign", "-", FRAMEWORK)
 run("codesign", "--force", "--sign", "-", "--entitlements",
     ROOT / "AudioPlugin" / "Extension" / "SwiftAudioPluginExtension.entitlements", EXTENSION)

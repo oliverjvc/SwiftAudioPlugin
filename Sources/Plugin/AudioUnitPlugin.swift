@@ -16,8 +16,29 @@ public enum SwiftAudioPluginFactory {
     }
 }
 
+/// Display-only readings, in dBFS (levels) and dB (gain reduction).
+/// Each scalar is atomic; UI polling never touches the render-owned engine.
+public struct MeterSnapshot {
+    public let inputLeft: Float
+    public let inputRight: Float
+    public let outputLeft: Float
+    public let outputRight: Float
+    public let compressorReduction: Float
+    public let limiterReduction: Float
+}
+
 public final class SwiftAudioUnit: AUAudioUnit {
     private let values = ParameterStore()
+    private let meters = ParameterStore()
+    public var meterSnapshot: MeterSnapshot {
+        MeterSnapshot(inputLeft: meters.get(90), inputRight: meters.get(91),
+                      outputLeft: meters.get(92), outputRight: meters.get(93),
+                      compressorReduction: meters.get(94), limiterReduction: meters.get(95))
+    }
+    private func clearMeters() {
+        for address: AUParameterAddress in 90...93 { meters.set(address, -100) }
+        meters.set(94, 0); meters.set(95, 0)
+    }
     private var inputs: AUAudioUnitBusArray!
     private var outputs: AUAudioUnitBusArray!
     private var tree: AUParameterTree!
@@ -53,6 +74,7 @@ public final class SwiftAudioUnit: AUAudioUnit {
         }
         tree.implementorValueProvider = { parameter in store.get(parameter.address) }
         selectedPreset = factoryPresets?.first
+        clearMeters()
     }
 
     public override var parameterTree: AUParameterTree? {
@@ -84,17 +106,19 @@ public final class SwiftAudioUnit: AUAudioUnit {
               (8000...192000).contains(format.sampleRate), maximumFramesToRender > 0 else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(kAudioUnitErr_FormatNotSupported))
         }
-        let state = try RenderState(format: format, capacity: maximumFramesToRender, values: values)
+        let state = try RenderState(format: format, capacity: maximumFramesToRender, values: values, meters: meters)
         try super.allocateRenderResources()
         resources.state = state
     }
     public override func deallocateRenderResources() {
         resources.state = nil
+        clearMeters()
         super.deallocateRenderResources()
     }
     public override func reset() {
         super.reset()
         resources.state?.reset()
+        clearMeters()
     }
 
     public override var factoryPresets: [AUAudioUnitPreset]? {
@@ -197,6 +221,7 @@ public final class SwiftAudioUnit: AUAudioUnit {
                 state.process(input: inputBuffers, output: buffers, offset: position, count: min(count, total - position))
                 position += min(count, total - position)
             }
+            state.publishMeters()
             // A reverb/delay tail may produce output even when upstream reports silence.
             flags.pointee.remove(.unitRenderAction_OutputIsSilence)
             return noErr
@@ -218,24 +243,31 @@ private final class RenderState {
     let channels: Int
     let capacity: AUAudioFrameCount
     let values: ParameterStore
+    let meters: ParameterStore
     var scratch: DSP.AudioBuffer
     var applied = [Float](repeating: .nan, count: 128)
     var rampRemaining = [UInt32](repeating: 0, count: 128)
     var rampStep = [Float](repeating: 0, count: 128)
     var hasRamps = false
 
-    init(format: AVAudioFormat, capacity: AUAudioFrameCount, values: ParameterStore) throws {
+    init(format: AVAudioFormat, capacity: AUAudioFrameCount, values: ParameterStore, meters: ParameterStore) throws {
         guard let input = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity),
               let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(kAudioUnitErr_FailedInitialization))
         }
-        self.input = input; self.output = output; self.capacity = capacity; self.values = values
+        self.input = input; self.output = output; self.capacity = capacity; self.values = values; self.meters = meters
         channels = Int(format.channelCount)
         inputPointers = (0..<Int(format.channelCount)).map { input.floatChannelData![$0] }
         scratch = DSP.AudioBuffer(frameCount: Int(capacity), channelCount: Int(format.channelCount))
         // Delay/reverb storage is sized in their initializers at the actual negotiated rate.
         engine = PluginEngine(sampleRate: format.sampleRate)
         syncParameters()
+    }
+    func publishMeters() {
+        meters.set(90, engine.inputLevelL); meters.set(91, engine.inputLevelR)
+        meters.set(92, engine.outputLevelL); meters.set(93, engine.outputLevelR)
+        meters.set(94, !engine.isBypassed && engine.compressor.isEnabled ? engine.compressor.gainReduction : 0)
+        meters.set(95, !engine.isBypassed && engine.limiter.isEnabled ? engine.limiter.gainReduction : 0)
     }
     func syncParameters() {
         for spec in ParameterSpec.all {

@@ -12,13 +12,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let applicationMenu = NSMenu()
         applicationMenu.addItem(withTitle: "Quit Swift Audio", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.submenu = applicationMenu
+        // Standard responder-chain actions are needed for numeric text fields.
+        let editItem = NSMenuItem()
+        menu.addItem(editItem)
+        let editMenu = NSMenu(title: "Edit")
+        for (title, action, key) in [
+            ("Cut", #selector(NSText.cut(_:)), "x"),
+            ("Copy", #selector(NSText.copy(_:)), "c"),
+            ("Paste", #selector(NSText.paste(_:)), "v"),
+            ("Select All", #selector(NSText.selectAll(_:)), "a")
+        ] {
+            editMenu.addItem(withTitle: title, action: action, keyEquivalent: key)
+        }
+        editItem.submenu = editMenu
         NSApp.mainMenu = menu
         do {
             let controller = SwiftAudioUnitViewController()
             _ = try controller.createAudioUnit(with: SwiftAudioPluginFactory.componentDescription)
             let window = NSWindow(contentViewController: controller)
             window.title = "Swift Audio — Controls Preview (use Logic Pro for audio)"
-            window.setContentSize(NSSize(width: 760, height: 560))
+            window.setContentSize(NSSize(width: 760, height: 640))
             window.center()
             window.makeKeyAndOrderFront(nil)
             self.controller = controller

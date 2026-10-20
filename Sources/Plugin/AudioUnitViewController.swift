@@ -17,11 +17,11 @@ public final class SwiftAudioUnitViewController: AUViewController, AUAudioUnitFa
         return created
     }
     public override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 560))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 640))
     }
     public override func viewDidLoad() {
         super.viewDidLoad()
-        preferredContentSize = NSSize(width: 760, height: 560)
+        preferredContentSize = NSSize(width: 760, height: 640)
         if let unit { showControls(for: unit) }
     }
     private func showControls(for unit: SwiftAudioUnit) {
@@ -39,19 +39,44 @@ public final class SwiftAudioUnitViewController: AUViewController, AUAudioUnitFa
     }
 }
 
-private final class ParameterModel: ObservableObject {
+final class ParameterModel: ObservableObject {
     let unit: SwiftAudioUnit
     @Published var values: [AUParameterAddress: Float] = [:]
+    @Published var activeSlot = 0
+    @Published var meters: MeterSnapshot
+    private var comparisons: [[AUParameterAddress: Float]] = []
     private var token: AUParameterObserverToken?
     init(unit: SwiftAudioUnit) {
         self.unit = unit
+        self.meters = unit.meterSnapshot
         for parameter in unit.parameterTree!.allParameters { values[parameter.address] = parameter.value }
+        comparisons = [values, values]
         token = unit.parameterTree?.token(byAddingParameterObserver: { [weak self] address, value in
             DispatchQueue.main.async { self?.values[address] = value }
         })
     }
     deinit { if let token { unit.parameterTree?.removeParameterObserver(token) } }
+    func selectComparison(_ slot: Int) {
+        guard (0...1).contains(slot), slot != activeSlot else { return }
+        refreshAutomation()
+        comparisons[activeSlot] = values
+        for (address, value) in comparisons[slot] {
+            unit.parameterTree?.parameter(withAddress: address)?.setValue(value, originator: token)
+        }
+        unit.currentPreset = nil
+        activeSlot = slot
+        refreshAutomation()
+    }
+    func copyComparison() {
+        refreshAutomation()
+        comparisons[1 - activeSlot] = values
+    }
+    func loadPreset(_ preset: AUAudioUnitPreset) {
+        unit.currentPreset = preset
+        refreshAutomation()
+    }
     func refreshAutomation() {
+        meters = unit.meterSnapshot
         // Scheduled render events update atomic values without calling UI observers on the audio thread.
         for parameter in unit.parameterTree!.allParameters {
             let current = parameter.value
@@ -61,9 +86,36 @@ private final class ParameterModel: ObservableObject {
     func binding(_ spec: ParameterSpec) -> Binding<Float> {
         Binding(get: { self.values[spec.address] ?? spec.initial }, set: { value in
             let bounded = spec.bounded(value)
+            self.unit.currentPreset = nil
             self.values[spec.address] = bounded
             self.unit.parameterTree?.parameter(withAddress: spec.address)?.setValue(bounded, originator: self.token)
         })
+    }
+}
+
+/// Keep partially typed values (such as a lone minus sign) out of the DSP.
+private struct ParameterValueField: View {
+    let name: String
+    @Binding var value: Float
+    @State private var draft = ""
+    @FocusState private var editing: Bool
+    private func formatted() -> String { String(format: "%.2f", value) }
+    private func commit() {
+        if let parsed = Float(draft.replacingOccurrences(of: ",", with: ".")), parsed.isFinite {
+            value = parsed
+        }
+        draft = formatted()
+    }
+    var body: some View {
+        TextField(name, text: $draft)
+            .textFieldStyle(.plain).multilineTextAlignment(.trailing)
+            .font(.system(size: 11, design: .monospaced))
+            .focused($editing)
+            .accessibilityLabel("\(name) value")
+            .onAppear { draft = formatted() }
+            .onSubmit { commit(); editing = false }
+            .onChange(of: editing) { focused in if !focused { commit() } }
+            .onChange(of: value) { _ in if !editing { draft = formatted() } }
     }
 }
 
@@ -82,6 +134,30 @@ private struct PluginControls: View {
                 Toggle("Bypass", isOn: Binding(get: { (model.values[2] ?? 0) >= 0.5 }, set: {
                     model.binding(ParameterSpec.all.first { $0.address == 2 }!).wrappedValue = $0 ? 1 : 0
                 })).toggleStyle(.switch)
+            }
+            HStack {
+                Menu("Factory presets") {
+                    ForEach(model.unit.factoryPresets ?? [], id: \.number) { preset in
+                        Button(preset.name) { model.loadPreset(preset) }
+                    }
+                }.frame(width: 180)
+                Spacer()
+                Picker("Compare", selection: Binding(get: { model.activeSlot }, set: { model.selectComparison($0) })) {
+                    Text("A").tag(0)
+                    Text("B").tag(1)
+                }.pickerStyle(.segmented).frame(width: 130)
+                Button(model.activeSlot == 0 ? "Copy A → B" : "Copy B → A") { model.copyComparison() }
+                    .help("Copy current settings into the other comparison slot. A/B slots last while this editor is open.")
+            }
+            HStack(spacing: 18) {
+                levelMeter("IN L", value: model.meters.inputLeft)
+                levelMeter("IN R", value: model.meters.inputRight)
+                levelMeter("OUT L", value: model.meters.outputLeft)
+                levelMeter("OUT R", value: model.meters.outputRight)
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(String(format: "COMP  −%.1f dB", model.meters.compressorReduction))
+                    Text(String(format: "LIMIT −%.1f dB", model.meters.limiterReduction))
+                }.font(.system(size: 10, design: .monospaced)).frame(width: 115)
             }
             HStack(spacing: 30) {
                 parameterRow(ParameterSpec.all[0])
@@ -106,7 +182,7 @@ private struct PluginControls: View {
             }
         }
         .padding(24)
-        .frame(minWidth: 620, minHeight: 460)
+        .frame(minWidth: 620, minHeight: 560)
         .background(Color(red: 0.07, green: 0.09, blue: 0.12))
         .tint(accent)
         .environment(\.colorScheme, .dark)
@@ -125,7 +201,9 @@ private struct PluginControls: View {
                 HStack {
                     Text(spec.name).font(.system(size: 11, weight: .medium))
                     Spacer()
-                    Text(label(spec)).font(.system(size: 11, design: .monospaced)).foregroundStyle(accent)
+                    ParameterValueField(name: spec.name, value: model.binding(spec))
+                        .foregroundStyle(accent).frame(width: 72)
+                    Text(suffix(spec)).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 if spec.unit == .hertz {
                     Slider(value: Binding(get: { log10(model.binding(spec).wrappedValue) }, set: {
@@ -135,20 +213,36 @@ private struct PluginControls: View {
                 } else {
                     Slider(value: model.binding(spec), in: spec.range).accessibilityLabel(spec.name)
                 }
+            }.contextMenu {
+                Button("Reset to default") { model.binding(spec).wrappedValue = spec.initial }
             }
         }
     }
-    private func label(_ spec: ParameterSpec) -> String {
-        let value = model.values[spec.address] ?? spec.initial
-        let suffix: String
+    private func levelMeter(_ name: String, value: Float) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(name)
+                Spacer()
+                Text(value < -60 ? "−∞" : String(format: "%.1f", value))
+            }.font(.system(size: 9, design: .monospaced))
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.1))
+                    Capsule().fill(value >= 0 ? Color.red : accent)
+                        .frame(width: geometry.size.width * CGFloat(min(1, max(0, (value + 60) / 60))))
+                }
+            }.frame(height: 5)
+        }.accessibilityElement(children: .ignore)
+            .accessibilityLabel(name).accessibilityValue(String(format: "%.1f dBFS", value))
+    }
+    private func suffix(_ spec: ParameterSpec) -> String {
         switch spec.unit {
-        case .decibels: suffix = " dB"
-        case .hertz: suffix = " Hz"
-        case .milliseconds: suffix = " ms"
-        case .ratio: suffix = ":1"
-        default: suffix = ""
+        case .decibels: return "dB"
+        case .hertz: return "Hz"
+        case .milliseconds: return "ms"
+        case .ratio: return ":1"
+        default: return ""
         }
-        return String(format: abs(value) >= 100 ? "%.0f%@" : "%.2f%@", value, suffix)
     }
 }
 

@@ -162,5 +162,79 @@ struct AudioUnitTests {
         try unit.allocateRenderResources()
         #expect(try render(unit).flatMap { $0 }.allSatisfy(\.isFinite))
     }
+    @Test(arguments: [AVAudioChannelCount(1), 2])
+    func metersFollowAudioBypassAndReset(channels: AVAudioChannelCount) throws {
+        let unit = try makeUnit(channels: channels)
+        #expect(unit.meterSnapshot.inputLeft == -100)
+        unit.parameterTree!.parameter(withAddress: 1)!.value = -6.0206
+        _ = try render(unit)
+        let reading = unit.meterSnapshot
+        #expect(abs(reading.inputLeft + 20) < 0.001)
+        #expect(abs(reading.outputLeft + 26.0206) < 0.001)
+        #expect(abs(reading.inputRight - (channels == 1 ? -20 : -13.9794)) < 0.001)
+        unit.shouldBypassEffect = true
+        _ = try render(unit)
+        #expect(abs(unit.meterSnapshot.outputLeft + 20) < 0.001)
+        #expect(unit.meterSnapshot.compressorReduction == 0)
+        unit.reset()
+        #expect(unit.meterSnapshot.outputLeft == -100)
+        _ = try render(unit)
+        unit.deallocateRenderResources()
+        #expect(unit.meterSnapshot.inputLeft == -100)
+    }
+
+    @Test @MainActor func comparisonPreservesBothSlotsAndCopy() throws {
+        let unit = try makeUnit()
+        let model = ParameterModel(unit: unit)
+        let output = ParameterSpec.all.first { $0.address == 1 }!
+        model.binding(output).wrappedValue = -3
+        model.selectComparison(1)
+        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == 0)
+        model.binding(output).wrappedValue = -9
+        model.selectComparison(0)
+        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -3)
+        model.selectComparison(1)
+        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -9)
+        // Host automation must be captured too, even before the next UI poll.
+        unit.parameterTree!.parameter(withAddress: 1)!.value = -12
+        model.copyComparison()
+        model.selectComparison(0)
+        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -12)
+        model.loadPreset(unit.factoryPresets![1])
+        #expect(model.values[10] == -18)
+        model.selectComparison(1)
+        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -12)
+    }
+
+    @Test func extremeParametersStayFiniteAndLimited() throws {
+        let unit = try makeUnit()
+        for spec in ParameterSpec.all where spec.address != 2 {
+            unit.parameterTree!.parameter(withAddress: spec.address)!.value = spec.range.upperBound
+        }
+        for index in 0..<200 {
+            let audio = try render(unit, frames: 512, sample: index % 2 == 0 ? 1 : -1, time: Double(index * 512))
+            #expect(audio.flatMap { $0 }.allSatisfy { $0.isFinite && abs($0) <= 1.00001 })
+        }
+    }
+
+    @Test func renderTimingDiagnostic() throws {
+        // Run alone in release mode for useful measurements. Includes test-helper
+        // allocation/copies, so this is an upper-bound throughput diagnostic,
+        // not a realtime scheduling guarantee or a comparison with other plugins.
+        let unit = try makeUnit()
+        unit.currentPreset = unit.factoryPresets![0]
+        var durations: [Double] = []
+        for index in 0..<1000 {
+            let start = ProcessInfo.processInfo.systemUptime
+            let audio = try render(unit, frames: 128, time: Double(index * 128))
+            durations.append(ProcessInfo.processInfo.systemUptime - start)
+            #expect(audio[0].allSatisfy { $0.isFinite })
+        }
+        durations.sort()
+        let mean = durations.reduce(0, +) / Double(durations.count)
+        print(String(format: "RENDER DIAGNOSTIC 48kHz/128: mean %.3f ms, p95 %.3f ms, max %.3f ms; buffer budget 2.667 ms (includes harness)",
+                     mean * 1000, durations[949] * 1000, durations.last! * 1000))
+    }
+
 }
 #endif

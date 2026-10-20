@@ -184,8 +184,10 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
             
             // Mix to mono for reverb input and apply pre-delay
             let input = (left + right) * 0.5
+            // Read before advancing the write head. Zero means no delay, rather
+            // than reading the oldest sample in the entire 200 ms ring buffer.
+            let delayedInput = preDelaySamples == 0 ? input : (preDelayLine?.read(delay: preDelaySamples) ?? input)
             preDelayLine?.write(input)
-            let delayedInput = preDelayLine?.read(delay: preDelaySamples) ?? input
             
             // Process through comb filters (parallel)
             var outL: Float = 0.0

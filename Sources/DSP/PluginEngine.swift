@@ -213,10 +213,10 @@ public class PluginEngine: PlatformObservable {
     public var presets: [PluginPreset] = []
     
     // Metering
-    public var inputLevelL: Float = -60.0
-    public var inputLevelR: Float = -60.0
-    public var outputLevelL: Float = -60.0
-    public var outputLevelR: Float = -60.0
+    public var inputLevelL: Float = -100.0
+    public var inputLevelR: Float = -100.0
+    public var outputLevelL: Float = -100.0
+    public var outputLevelR: Float = -100.0
     
     public var sampleRate: Double {
         didSet {
@@ -240,16 +240,18 @@ public class PluginEngine: PlatformObservable {
     }
     
     public func process(_ buffer: inout AudioBuffer) {
-        guard !isBypassed else { return }
-        
+        // Input meters show the incoming signal, including while bypassed.
+        updateInputMeters(buffer)
+        guard !isBypassed else {
+            updateOutputMeters(buffer)
+            return
+        }
+
         // Apply input gain
         let inGainLinear = AudioUtils.dBToLinear(inputGain)
         for i in 0..<(buffer.frameCount * buffer.channelCount) {
             buffer.samples[i] *= inGainLinear
         }
-        
-        // Update input meters
-        updateInputMeters(buffer)
         
         // Process through effect chain
         eq.process(&buffer)
@@ -282,9 +284,10 @@ public class PluginEngine: PlatformObservable {
             }
         }
         
-        let smooth: Float = 0.9
-        inputLevelL = smooth * inputLevelL + (1.0 - smooth) * AudioUtils.linearToDB(peakL)
-        inputLevelR = smooth * inputLevelR + (1.0 - smooth) * AudioUtils.linearToDB(peakR)
+        if buffer.channelCount == 1 { peakR = peakL }
+        let decay = 24 * Float(buffer.frameCount) / Float(sampleRate)
+        inputLevelL = max(-100, max(AudioUtils.linearToDB(peakL), inputLevelL - decay))
+        inputLevelR = max(-100, max(AudioUtils.linearToDB(peakR), inputLevelR - decay))
     }
     
     private func updateOutputMeters(_ buffer: AudioBuffer) {
@@ -299,9 +302,10 @@ public class PluginEngine: PlatformObservable {
             }
         }
         
-        let smooth: Float = 0.9
-        outputLevelL = smooth * outputLevelL + (1.0 - smooth) * AudioUtils.linearToDB(peakL)
-        outputLevelR = smooth * outputLevelR + (1.0 - smooth) * AudioUtils.linearToDB(peakR)
+        if buffer.channelCount == 1 { peakR = peakL }
+        let decay = 24 * Float(buffer.frameCount) / Float(sampleRate)
+        outputLevelL = max(-100, max(AudioUtils.linearToDB(peakL), outputLevelL - decay))
+        outputLevelR = max(-100, max(AudioUtils.linearToDB(peakR), outputLevelR - decay))
     }
     
     public func reset() {
@@ -310,6 +314,8 @@ public class PluginEngine: PlatformObservable {
         reverb.reset()
         delay.reset()
         limiter.reset()
+        inputLevelL = -100; inputLevelR = -100
+        outputLevelL = -100; outputLevelR = -100
     }
     
     private func loadFactoryPresets() {
