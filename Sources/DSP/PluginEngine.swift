@@ -15,6 +15,14 @@ public struct PluginPreset: Codable, Identifiable {
     public var compressorSettings: CompressorPresetData
     public var reverbSettings: ReverbPresetData
     public var delaySettings: DelayPresetData
+    public var limiterSettings: LimiterPresetData = LimiterPresetData()
+    public var inputGain: Float = 0.0
+    public var outputGain: Float = 0.0
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, category, eqSettings, compressorSettings, reverbSettings, delaySettings
+        case limiterSettings, inputGain, outputGain
+    }
     
     public init(name: String, category: String = "User") {
         self.name = name
@@ -24,10 +32,29 @@ public struct PluginPreset: Codable, Identifiable {
         self.reverbSettings = ReverbPresetData()
         self.delaySettings = DelayPresetData()
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(String.self, forKey: .category)
+        eqSettings = try container.decode(EQPresetData.self, forKey: .eqSettings)
+        compressorSettings = try container.decode(CompressorPresetData.self, forKey: .compressorSettings)
+        reverbSettings = try container.decode(ReverbPresetData.self, forKey: .reverbSettings)
+        delaySettings = try container.decode(DelayPresetData.self, forKey: .delaySettings)
+        // Presets written before these fields existed use the processor defaults.
+        limiterSettings = try container.decodeIfPresent(LimiterPresetData.self, forKey: .limiterSettings)
+            ?? LimiterPresetData()
+        inputGain = try container.decodeIfPresent(Float.self, forKey: .inputGain) ?? 0.0
+        outputGain = try container.decodeIfPresent(Float.self, forKey: .outputGain) ?? 0.0
+    }
 }
 
 public struct EQPresetData: Codable {
     public var bands: [(frequency: Float, gain: Float, q: Float, type: String)] = []
+    /// Indexed alongside bands to preserve the existing public tuple API.
+    /// Missing entries mean enabled; extra entries are ignored.
+    public var bandEnabled: [Bool] = []
     public var outputGain: Float = 0.0
     public var isEnabled: Bool = true
     
@@ -46,17 +73,55 @@ public struct EQPresetData: Codable {
     }
     
     public init(from decoder: Decoder) throws {
+        self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
         outputGain = try container.decode(Float.self, forKey: .outputGain)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
-        // Simplified decoding for bands
-        bands = []
+        // The original encoder omitted bands entirely. Restore the neutral five-band EQ.
+        if let decoded = try container.decodeIfPresent([BandData].self, forKey: .bands) {
+            bands = decoded.map { ($0.frequency, $0.gain, $0.q, $0.type) }
+            bandEnabled = decoded.map { $0.isEnabled }
+        }
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(outputGain, forKey: .outputGain)
         try container.encode(isEnabled, forKey: .isEnabled)
+        let encoded = bands.enumerated().map { index, band in
+            BandData(frequency: band.frequency, gain: band.gain, q: band.q, type: band.type,
+                     isEnabled: index < bandEnabled.count ? bandEnabled[index] : true)
+        }
+        try container.encode(encoded, forKey: .bands)
+    }
+
+    private struct BandData: Codable {
+        var frequency: Float
+        var gain: Float
+        var q: Float
+        var type: String
+        var isEnabled: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case frequency, gain, q, type, isEnabled
+        }
+
+        init(frequency: Float, gain: Float, q: Float, type: String, isEnabled: Bool) {
+            self.frequency = frequency
+            self.gain = gain
+            self.q = q
+            self.type = type
+            self.isEnabled = isEnabled
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            frequency = try container.decode(Float.self, forKey: .frequency)
+            gain = try container.decode(Float.self, forKey: .gain)
+            q = try container.decode(Float.self, forKey: .q)
+            type = try container.decode(String.self, forKey: .type)
+            isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        }
     }
 }
 
@@ -92,7 +157,43 @@ public struct DelayPresetData: Codable {
     public var dryLevel: Float = 1.0
     public var pingPong: Bool = false
     public var isEnabled: Bool = true
+    public var highCut: Float = 8000.0
+    public var lowCut: Float = 100.0
+    public var tempo: Float = 120.0
+    public var syncEnabled: Bool = false
+    public var syncDivisionL: Float = 0.25
+    public var syncDivisionR: Float = 0.25
+
+    enum CodingKeys: String, CodingKey {
+        case delayTimeL, delayTimeR, feedback, wetLevel, dryLevel, pingPong, isEnabled
+        case highCut, lowCut, tempo, syncEnabled, syncDivisionL, syncDivisionR
+    }
     
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        delayTimeL = try container.decode(Float.self, forKey: .delayTimeL)
+        delayTimeR = try container.decode(Float.self, forKey: .delayTimeR)
+        feedback = try container.decode(Float.self, forKey: .feedback)
+        wetLevel = try container.decode(Float.self, forKey: .wetLevel)
+        dryLevel = try container.decode(Float.self, forKey: .dryLevel)
+        pingPong = try container.decode(Bool.self, forKey: .pingPong)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        highCut = try container.decodeIfPresent(Float.self, forKey: .highCut) ?? 8000.0
+        lowCut = try container.decodeIfPresent(Float.self, forKey: .lowCut) ?? 100.0
+        tempo = try container.decodeIfPresent(Float.self, forKey: .tempo) ?? 120.0
+        syncEnabled = try container.decodeIfPresent(Bool.self, forKey: .syncEnabled) ?? false
+        syncDivisionL = try container.decodeIfPresent(Float.self, forKey: .syncDivisionL) ?? 0.25
+        syncDivisionR = try container.decodeIfPresent(Float.self, forKey: .syncDivisionR) ?? 0.25
+    }
+}
+
+public struct LimiterPresetData: Codable {
+    public var ceiling: Float = -0.3
+    public var release: Float = 50.0
+    public var isEnabled: Bool = true
+
     public init() {}
 }
 
@@ -235,6 +336,28 @@ public class PluginEngine: PlatformObservable {
     
     public func loadPreset(_ preset: PluginPreset) {
         currentPreset = preset
+
+        inputGain = preset.inputGain
+        outputGain = preset.outputGain
+
+        // Reuse existing bands so UI references and filter history remain intact.
+        eq.bands = preset.eqSettings.bands.enumerated().map { index, settings in
+            let band = index < eq.bands.count ? eq.bands[index] : EQBand()
+            band.frequency = settings.frequency
+            band.gain = settings.gain
+            band.q = settings.q
+            // Accept the original lowercase "peak" spelling as well as enum raw values.
+            // Unknown types fall back to a peak filter.
+            band.type = EQBandType.allCases.first {
+                $0.rawValue.lowercased() == settings.type.lowercased()
+            } ?? .peak
+            band.isEnabled = index < preset.eqSettings.bandEnabled.count
+                ? preset.eqSettings.bandEnabled[index] : true
+            band.setSampleRate(sampleRate)
+            return band
+        }
+        eq.outputGain = preset.eqSettings.outputGain
+        eq.isEnabled = preset.eqSettings.isEnabled
         
         // Apply compressor settings
         compressor.threshold = preset.compressorSettings.threshold
@@ -242,6 +365,7 @@ public class PluginEngine: PlatformObservable {
         compressor.attack = preset.compressorSettings.attack
         compressor.release = preset.compressorSettings.release
         compressor.makeupGain = preset.compressorSettings.makeupGain
+        compressor.knee = preset.compressorSettings.knee
         compressor.isEnabled = preset.compressorSettings.isEnabled
         
         // Apply reverb settings
@@ -261,10 +385,28 @@ public class PluginEngine: PlatformObservable {
         delay.dryLevel = preset.delaySettings.dryLevel
         delay.pingPong = preset.delaySettings.pingPong
         delay.isEnabled = preset.delaySettings.isEnabled
+        delay.highCut = preset.delaySettings.highCut
+        delay.lowCut = preset.delaySettings.lowCut
+        delay.tempo = preset.delaySettings.tempo
+        delay.syncEnabled = preset.delaySettings.syncEnabled
+        delay.syncDivisionL = preset.delaySettings.syncDivisionL
+        delay.syncDivisionR = preset.delaySettings.syncDivisionR
+
+        limiter.ceiling = preset.limiterSettings.ceiling
+        limiter.release = preset.limiterSettings.release
+        limiter.isEnabled = preset.limiterSettings.isEnabled
     }
     
     public func saveCurrentAsPreset(name: String, category: String = "User") -> PluginPreset {
         var preset = PluginPreset(name: name, category: category)
+
+        // Sample rate, global bypass, meters and DSP history are runtime state.
+        preset.inputGain = inputGain
+        preset.outputGain = outputGain
+        preset.eqSettings.bands = eq.bands.map { ($0.frequency, $0.gain, $0.q, $0.type.rawValue) }
+        preset.eqSettings.bandEnabled = eq.bands.map { $0.isEnabled }
+        preset.eqSettings.outputGain = eq.outputGain
+        preset.eqSettings.isEnabled = eq.isEnabled
         
         // Save compressor settings
         preset.compressorSettings.threshold = compressor.threshold
@@ -272,6 +414,7 @@ public class PluginEngine: PlatformObservable {
         preset.compressorSettings.attack = compressor.attack
         preset.compressorSettings.release = compressor.release
         preset.compressorSettings.makeupGain = compressor.makeupGain
+        preset.compressorSettings.knee = compressor.knee
         preset.compressorSettings.isEnabled = compressor.isEnabled
         
         // Save reverb settings
@@ -291,6 +434,16 @@ public class PluginEngine: PlatformObservable {
         preset.delaySettings.dryLevel = delay.dryLevel
         preset.delaySettings.pingPong = delay.pingPong
         preset.delaySettings.isEnabled = delay.isEnabled
+        preset.delaySettings.highCut = delay.highCut
+        preset.delaySettings.lowCut = delay.lowCut
+        preset.delaySettings.tempo = delay.tempo
+        preset.delaySettings.syncEnabled = delay.syncEnabled
+        preset.delaySettings.syncDivisionL = delay.syncDivisionL
+        preset.delaySettings.syncDivisionR = delay.syncDivisionR
+
+        preset.limiterSettings.ceiling = limiter.ceiling
+        preset.limiterSettings.release = limiter.release
+        preset.limiterSettings.isEnabled = limiter.isEnabled
         
         presets.append(preset)
         currentPreset = preset
