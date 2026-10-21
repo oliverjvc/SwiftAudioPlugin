@@ -111,7 +111,7 @@ struct EditorKnob: View {
                                    startPoint: .topLeading, endPoint: .bottomTrailing))
                     .padding(9).overlay(Circle().stroke(Color.white.opacity(0.06)).padding(9))
                 Capsule().fill(color).frame(width: 3, height: 12).offset(y: -17)
-                    .rotationEffect(.degrees(Double(normalized) * 270))
+                    .rotationEffect(.degrees(Double(normalized) * 270 + 90))
             }
             .rotationEffect(.degrees(135))
             .frame(width: 66, height: 66)
@@ -234,12 +234,12 @@ struct PluginControls: View {
                 Text("Save your sound").font(.title2.weight(.semibold))
                 Text("Presets include all processing settings and bypass.").foregroundStyle(.secondary)
                 TextField("Preset name", text: $presetName).textFieldStyle(.roundedBorder)
-                    .onSubmit { prepareExport() }
+                    .onSubmit { if presetName.count <= 80 { prepareExport() } }
                 HStack {
                     Button("Cancel") { naming = false }.keyboardShortcut(.cancelAction)
                     Spacer()
                     Button("Choose file…") { prepareExport() }.keyboardShortcut(.defaultAction)
-                        .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || presetName.count > 80)
                 }
             }.padding(26).frame(width: 390).preferredColorScheme(.dark)
         }
@@ -286,7 +286,7 @@ struct PluginControls: View {
                     Image(systemName: "slider.horizontal.3").foregroundStyle(EditorPalette.accent)
                     Text(model.presetName).lineLimit(1)
                 }.frame(width: 180, alignment: .leading)
-            }.menuStyle(.borderlessButton)
+            }.menuStyle(.borderlessButton).frame(width: 200)
             iconButton("Import preset", symbol: "square.and.arrow.down") { importing = true }
             iconButton("Export preset", symbol: "square.and.arrow.up") {
                 presetName = model.presetName == "Custom" ? "My preset" : model.presetName
@@ -299,7 +299,7 @@ struct PluginControls: View {
             Picker("Compare", selection: Binding(get: { model.activeSlot }, set: { model.selectComparison($0) })) {
                 Text("A").tag(0)
                 Text("B").tag(1)
-            }.pickerStyle(.segmented).frame(width: 86)
+            }.pickerStyle(.segmented).labelsHidden().frame(width: 86)
             Button(model.activeSlot == 0 ? "A → B" : "B → A") { model.copyComparison() }
                 .font(.system(size: 11, design: .monospaced))
                 .help("Copy all current settings to the other comparison slot.")

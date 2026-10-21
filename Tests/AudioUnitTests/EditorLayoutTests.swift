@@ -19,7 +19,7 @@ struct EditorLayoutTests {
         window.contentView = host
         defer { window.orderOut(nil) }
         for (width, height) in [(960, 760), (760, 640)] {
-            window.setContentSize(NSSize(width: width, height: height))
+            window.setContentSize(NSSize(width: CGFloat(width), height: CGFloat(height)))
             host.layoutSubtreeIfNeeded()
             // Allow SwiftUI's initial layout/appearance pass on the main run loop.
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.15))

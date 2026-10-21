@@ -28,7 +28,7 @@ struct EqualizerEditor: View {
         }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Shape your sound").font(.system(size: 23, weight: .medium))
@@ -39,7 +39,7 @@ struct EqualizerEditor: View {
                     .toggleStyle(.switch).controlSize(.mini).fixedSize()
                 Button("Reset") { model.resetGroup("Equalizer") }.font(.system(size: 10))
             }
-            graph.frame(height: 220)
+            graph.frame(height: 170)
                 .background(EditorPalette.panel, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.04)))
             HStack(spacing: 8) {
@@ -75,7 +75,7 @@ struct EqualizerEditor: View {
                     )).toggleStyle(.switch).controlSize(.mini).fixedSize()
                     Text("PEAK FILTER").font(.system(size: 8, design: .monospaced)).foregroundStyle(.tertiary)
                 }.frame(maxWidth: .infinity)
-            }.padding(18).background(EditorPalette.panel, in: RoundedRectangle(cornerRadius: 12))
+            }.padding(12).background(EditorPalette.panel, in: RoundedRectangle(cornerRadius: 12))
         }
         .onDisappear { if dragging { dragging = false; model.endGesture() } }
     }
