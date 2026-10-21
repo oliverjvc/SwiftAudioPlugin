@@ -121,6 +121,20 @@ public class EQBand: PlatformObservable {
         self.a2 = a2 / a0
     }
     
+    /// Linear steady-state magnitude of this band's actual biquad coefficients.
+    /// Does not advance filter history. Visualizers should use their own band instances.
+    public func magnitudeResponse(at frequency: Float) -> Float {
+        guard isEnabled, frequency.isFinite, sampleRate.isFinite, sampleRate > 0 else { return 1 }
+        let clamped = min(max(Double(frequency), 0), sampleRate / 2)
+        let omega = 2 * Double.pi * clamped / sampleRate
+        let realB = Double(b0) + Double(b1) * cos(omega) + Double(b2) * cos(2 * omega)
+        let imaginaryB = -Double(b1) * sin(omega) - Double(b2) * sin(2 * omega)
+        let realA = 1 + Double(a1) * cos(omega) + Double(a2) * cos(2 * omega)
+        let imaginaryA = -Double(a1) * sin(omega) - Double(a2) * sin(2 * omega)
+        let numerator = realB * realB + imaginaryB * imaginaryB
+        let denominator = max(1e-30, realA * realA + imaginaryA * imaginaryA)
+        return Float(sqrt(numerator / denominator))
+    }
     public func processSample(left: Float, right: Float) -> (Float, Float) {
         guard isEnabled else { return (left, right) }
         

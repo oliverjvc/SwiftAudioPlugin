@@ -5,6 +5,8 @@ algorithmic reverb and limiter. The Audio Unit v3 build is intended for Logic Pr
 and includes a custom SwiftUI editor, 50 automatable parameters, four factory
 presets and project/preset state restoration. The editor includes stereo peak
 meters, gain-reduction readouts, A/B comparison and direct numeric entry.
+The AU editor now adds a draggable EQ response graph, rotary controls, grouped
+undo/redo and portable user preset import/export.
 
 ## Build and test
 
@@ -87,6 +89,24 @@ slots last while the editor is open. Type a number and press Return (or leave th
 field) to commit; right-click a numeric control to reset its default. Input/output
 meters show dBFS and the COMP/LIMIT readouts show gain reduction in dB.
 
+The EQ editor displays the actual filter response on a logarithmic frequency
+axis. Drag a numbered node to change frequency and gain together; double-click
+it to reset gain. Select B1–B5 to edit frequency, gain, Q and band enable.
+The curve shows filter response, not a live audio spectrum. The existing AU
+still exposes five peak bands.
+
+Rotary controls support Shift-drag for fine adjustments, numeric entry,
+double-click reset and right-click reset. The toolbar's Undo/Redo buttons
+restore editor changes, factory presets, A/B operations, module resets and
+imported presets. A whole drag is one step; history holds the last 100 editor
+actions and lasts while the editor is open. Host automation is read before
+each checkpoint; it does not create editor undo steps.
+
+Use Import/Export beside the preset menu to share named JSON presets.
+The file includes all 50 AU parameters, including bypass. Files are validated
+completely before application. These editor JSON files are separate from
+Logic's Audio Unit presets and the DSP library's PluginPreset format.
+See [editor workflow](docs/EDITOR_WORKFLOW.md) for validation and platform notes.
 Factory presets: Default, Warm Vocal, Punchy Drums and Ambient Pad. Logic can
 save the exposed parameters in projects and Audio Unit presets. The AU delay
 uses milliseconds; the DSP library's optional tempo-sync controls and EQ filter
@@ -127,7 +147,7 @@ allocation. Apple `auval` separately checks the installed component.
   a successful `auval` run does not replace that host-specific check.
 - No VST3 or AAX wrapper. The AU packaging/editor are macOS-only.
 - The standalone demo does not implement a microphone/audio-device engine.
-- The AU has peak/GR meters but no spectrum analyzer or graphical EQ curve.
+- The AU has an interactive EQ response curve and peak/GR meters, but no live spectrum analyzer.
 - The limiter is sample-peak, not true-peak. Abrupt parameter/preset/bypass changes
   are not yet smoothed. See [quality review](QUALITY_REPORT.md) for remaining gaps.
 
