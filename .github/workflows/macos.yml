@@ -1,0 +1,44 @@
+name: macOS build and tests
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: DSP and Audio Unit tests
+        run: bash scripts/test.sh
+        env:
+          SWIFT_AUDIO_SNAPSHOT_DIR: Build/EditorPreviews
+      - name: Package Audio Unit
+        run: bash scripts/build-au.sh
+      - name: Archive development app
+        run: ditto -c -k --sequesterRsrc --keepParent "Build/Swift Audio.app" Build/SwiftAudio-development.zip
+      - name: Upload development app
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwiftAudio-macOS-development
+          path: Build/SwiftAudio-development.zip
+          if-no-files-found: error
+
+      - name: Upload editor previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwiftAudio-editor-previews
+          path: Build/EditorPreviews/
+          if-no-files-found: ignore
