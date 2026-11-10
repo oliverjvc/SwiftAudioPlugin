@@ -7,15 +7,20 @@ _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "Audio parameters require lock-free at
 struct ParameterAtomics { size_t reserved; _Atomic(uint32_t) values[]; };
 ParameterAtomics *ParameterAtomicsCreate(size_t count) {
     ParameterAtomics *store = calloc(1, sizeof(*store) + count * sizeof(_Atomic(uint32_t)));
-    if (store) for (size_t i = 0; i < count; ++i) atomic_init(&store->values[i], 0);
+    if (store) {
+        store->reserved = count;
+        for (size_t i = 0; i < count; ++i) atomic_init(&store->values[i], 0);
+    }
     return store;
 }
 void ParameterAtomicsDestroy(ParameterAtomics *store) { free(store); }
 float ParameterAtomicsLoad(const ParameterAtomics *store, size_t index) {
+    if (!store || index >= store->reserved) return 0.0f;
     uint32_t bits = atomic_load_explicit(&store->values[index], memory_order_relaxed);
     float value; memcpy(&value, &bits, sizeof(value)); return value;
 }
 void ParameterAtomicsStore(ParameterAtomics *store, size_t index, float value) {
+    if (!store || index >= store->reserved) return;
     uint32_t bits; memcpy(&bits, &value, sizeof(bits));
     atomic_store_explicit(&store->values[index], bits, memory_order_relaxed);
 }

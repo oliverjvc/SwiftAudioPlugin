@@ -12,14 +12,6 @@ public typealias PlatformObservable = ObservableObject
 public protocol PlatformObservable {}
 #endif
 
-/// Sample rate commonly used in audio processing
-public enum SampleRate: Double {
-    case rate44100 = 44100.0
-    case rate48000 = 48000.0
-    case rate96000 = 96000.0
-    case rate192000 = 192000.0
-}
-
 /// Audio buffer for processing
 public struct AudioBuffer {
     public var samples: [Float]

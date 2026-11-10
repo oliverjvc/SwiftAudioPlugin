@@ -213,13 +213,7 @@ public class PluginEngine: PlatformObservable {
     
     public var currentPreset: PluginPreset?
     public var presets: [PluginPreset] = []
-    
-    // Metering
-    public var inputLevelL: Float = -100.0
-    public var inputLevelR: Float = -100.0
-    public var outputLevelL: Float = -100.0
-    public var outputLevelR: Float = -100.0
-    
+
     public var sampleRate: Double {
         didSet {
             eq.sampleRate = sampleRate
@@ -242,12 +236,7 @@ public class PluginEngine: PlatformObservable {
     }
     
     public func process(_ buffer: inout AudioBuffer) {
-        // Input meters show the incoming signal, including while bypassed.
-        updateInputMeters(buffer)
-        guard !isBypassed else {
-            updateOutputMeters(buffer)
-            return
-        }
+        guard !isBypassed else { return }
 
         if roomReverbMode {
             reverb.process(&buffer)
@@ -257,7 +246,6 @@ public class PluginEngine: PlatformObservable {
             }
             // Keep a fixed safety ceiling after the wet effect and output gain.
             limiter.process(&buffer)
-            updateOutputMeters(buffer)
             return
         }
 
@@ -281,55 +269,14 @@ public class PluginEngine: PlatformObservable {
         
         // Final limiting
         limiter.process(&buffer)
-        
-        // Update output meters
-        updateOutputMeters(buffer)
     }
-    
-    private func updateInputMeters(_ buffer: AudioBuffer) {
-        var peakL: Float = 0.0
-        var peakR: Float = 0.0
-        
-        for frame in 0..<buffer.frameCount {
-            let leftIdx = frame * buffer.channelCount
-            peakL = max(peakL, abs(buffer.samples[leftIdx]))
-            if buffer.channelCount > 1 {
-                peakR = max(peakR, abs(buffer.samples[leftIdx + 1]))
-            }
-        }
-        
-        if buffer.channelCount == 1 { peakR = peakL }
-        let decay = 24 * Float(buffer.frameCount) / Float(sampleRate)
-        inputLevelL = max(-100, max(AudioUtils.linearToDB(peakL), inputLevelL - decay))
-        inputLevelR = max(-100, max(AudioUtils.linearToDB(peakR), inputLevelR - decay))
-    }
-    
-    private func updateOutputMeters(_ buffer: AudioBuffer) {
-        var peakL: Float = 0.0
-        var peakR: Float = 0.0
-        
-        for frame in 0..<buffer.frameCount {
-            let leftIdx = frame * buffer.channelCount
-            peakL = max(peakL, abs(buffer.samples[leftIdx]))
-            if buffer.channelCount > 1 {
-                peakR = max(peakR, abs(buffer.samples[leftIdx + 1]))
-            }
-        }
-        
-        if buffer.channelCount == 1 { peakR = peakL }
-        let decay = 24 * Float(buffer.frameCount) / Float(sampleRate)
-        outputLevelL = max(-100, max(AudioUtils.linearToDB(peakL), outputLevelL - decay))
-        outputLevelR = max(-100, max(AudioUtils.linearToDB(peakR), outputLevelR - decay))
-    }
-    
+
     public func reset() {
         eq.reset()
         compressor.reset()
         reverb.reset()
         delay.reset()
         limiter.reset()
-        inputLevelL = -100; inputLevelR = -100
-        outputLevelL = -100; outputLevelR = -100
     }
     
     private func loadFactoryPresets() {

@@ -82,8 +82,8 @@ struct PresetSerializationTests {
         let engine = PluginEngine(sampleRate: 48000)
         let existingBand = engine.eq.bands[0]
         engine.isBypassed = true
-        engine.inputLevelL = -12
-        engine.outputLevelR = -15
+        engine.compressor.inputLevel = -12
+        engine.limiter.gainReduction = -15
         let preset = try completePreset()
         let count = engine.presets.count
         engine.loadPreset(preset)
@@ -92,8 +92,8 @@ struct PresetSerializationTests {
         #expect(engine.presets.count == count)
         #expect(engine.isBypassed)
         #expect(engine.sampleRate == 48000)
-        #expect(engine.inputLevelL == -12)
-        #expect(engine.outputLevelR == -15)
+        #expect(engine.compressor.inputLevel == -12)
+        #expect(engine.limiter.gainReduction == -15)
         #expect(engine.inputGain == -4.5)
         #expect(engine.outputGain == 2.5)
         #expect(engine.eq.bands[0] === existingBand)

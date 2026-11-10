@@ -165,24 +165,29 @@ struct AudioUnitTests {
         #expect(try render(unit).flatMap { $0 }.allSatisfy(\.isFinite))
     }
     @Test(arguments: [AVAudioChannelCount(1), 2])
-    func metersFollowAudioBypassAndReset(channels: AVAudioChannelCount) throws {
+    func outputGainAndBypassAffectTheRenderedSignal(channels: AVAudioChannelCount) throws {
         let unit = try makeUnit(channels: channels)
-        #expect(unit.meterSnapshot.inputLeft == -100)
+        // Channel 0 carries the test sample, channel 1 twice its amplitude.
+        func expectAmplitude(_ block: [[Float]], _ scale: Float) {
+            for (channel, frames) in block.enumerated() {
+                let reference = 0.25 * Float(channel + 1) * scale
+                #expect(frames.allSatisfy { abs($0 - reference) < 0.000001 })
+            }
+        }
+        // At Amount 0 the room is dry, so the gain stage is directly measurable.
+        unit.parameterTree!.parameter(withAddress: 3)!.value = 0
+        expectAmplitude(try render(unit, frames: 256, sample: 0.25), 1)
+
         unit.parameterTree!.parameter(withAddress: 1)!.value = -6.0206
-        _ = try render(unit)
-        let reading = unit.meterSnapshot
-        #expect(abs(reading.inputLeft + 20) < 0.001)
-        #expect(abs(reading.outputLeft + 26.0206) < 0.001)
-        #expect(abs(reading.inputRight - (channels == 1 ? -20 : -13.9794)) < 0.001)
+        expectAmplitude(try render(unit, frames: 256, sample: 0.25), 0.5)
+
+        // Bypass hands back the untouched input, so the output gain is skipped too.
         unit.shouldBypassEffect = true
-        _ = try render(unit)
-        #expect(abs(unit.meterSnapshot.outputLeft + 20) < 0.001)
-        #expect(unit.meterSnapshot.compressorReduction == 0)
+        expectAmplitude(try render(unit, frames: 256, sample: 0.25), 1)
+
+        unit.shouldBypassEffect = false
         unit.reset()
-        #expect(unit.meterSnapshot.outputLeft == -100)
-        _ = try render(unit)
-        unit.deallocateRenderResources()
-        #expect(unit.meterSnapshot.inputLeft == -100)
+        expectAmplitude(try render(unit, frames: 256, sample: 0.25), 0.5)
     }
 
     @Test func extremeParametersStayFiniteAndLimited() throws {

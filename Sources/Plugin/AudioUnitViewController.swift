@@ -45,7 +45,7 @@ final class ParameterModel: ObservableObject {
     private var token: AUParameterObserverToken?
     init(unit: SwiftAudioUnit) {
         self.unit = unit
-        for parameter in unit.parameterTree!.allParameters { values[parameter.address] = parameter.value }
+        for parameter in unit.parameterTree?.allParameters ?? [] { values[parameter.address] = parameter.value }
         token = unit.parameterTree?.token(byAddingParameterObserver: { [weak self] address, value in
             DispatchQueue.main.async { self?.values[address] = value }
         })
@@ -53,7 +53,7 @@ final class ParameterModel: ObservableObject {
     deinit { if let token { unit.parameterTree?.removeParameterObserver(token) } }
     func refreshAutomation() {
         // Scheduled render events update atomic values without calling UI observers on the audio thread.
-        for parameter in unit.parameterTree!.allParameters {
+        for parameter in unit.parameterTree?.allParameters ?? [] {
             let current = parameter.value
             if values[parameter.address] != current { values[parameter.address] = current }
         }
@@ -65,32 +65,6 @@ final class ParameterModel: ObservableObject {
             self.values[spec.address] = bounded
             self.unit.parameterTree?.parameter(withAddress: spec.address)?.setValue(bounded, originator: self.token)
         })
-    }
-}
-
-/// Keep partially typed values (such as a lone minus sign) out of the DSP.
-private struct ParameterValueField: View {
-    let name: String
-    @Binding var value: Float
-    @State private var draft = ""
-    @FocusState private var editing: Bool
-    private func formatted() -> String { String(format: "%.2f", value) }
-    private func commit() {
-        if let parsed = Float(draft.replacingOccurrences(of: ",", with: ".")), parsed.isFinite {
-            value = parsed
-        }
-        draft = formatted()
-    }
-    var body: some View {
-        TextField(name, text: $draft)
-            .textFieldStyle(.plain).multilineTextAlignment(.trailing)
-            .font(.system(size: 11, design: .monospaced))
-            .focused($editing)
-            .accessibilityLabel("\(name) value")
-            .onAppear { draft = formatted() }
-            .onSubmit { commit(); editing = false }
-            .onChange(of: editing) { focused in if !focused { commit() } }
-            .onChange(of: value) { _ in if !editing { draft = formatted() } }
     }
 }
 

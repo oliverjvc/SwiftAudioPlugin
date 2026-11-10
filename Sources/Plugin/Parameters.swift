@@ -1,5 +1,6 @@
 #if os(macOS)
 import AudioToolbox
+import Foundation
 import DSP
 import ParameterAtomics
 
@@ -30,6 +31,9 @@ struct ParameterSpec {
     }
 
     static let groups = ["Main", "Equalizer", "Compressor", "Delay", "Reverb", "Limiter"]
+    /// Address slots every consumer of the atomic store shares, so a new address
+    /// cannot outrun one of the per-render caches.
+    static let addressSpace = 128
     static let all: [ParameterSpec] = {
         var specs: [ParameterSpec] = [
             .init(0, "inputGain", "Input", "Main", -24...24, 0, .decibels) { $0.inputGain = $1 },
@@ -81,8 +85,12 @@ struct ParameterSpec {
 /// UI/host and audio thread exchange scalar values without locks or sharing the DSP engine.
 final class ParameterStore {
     private let pointer: OpaquePointer
-    init() {
-        guard let pointer = ParameterAtomicsCreate(128) else { fatalError("Parameter allocation failed") }
+    init() throws {
+        // A host handles a thrown error during instantiation; a trap would take the
+        // whole Audio Unit service process with it.
+        guard let pointer = ParameterAtomicsCreate(ParameterSpec.addressSpace) else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(kAudioUnitErr_FailedInitialization))
+        }
         self.pointer = pointer
         for spec in ParameterSpec.all { set(spec.address, spec.initial) }
     }

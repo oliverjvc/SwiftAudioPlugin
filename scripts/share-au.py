@@ -54,11 +54,11 @@ Requirements: macOS 13 or later, and an Audio Unit host such as Logic Pro.
 2. Unzip this file and move the entire Swift Audio.app into Applications. If
    prompted, replace only an older Swift Audio.app. Do not remove or replace any
    other audio plug-ins.
-3. Keep exactly one Swift Audio.app on the Mac. If an older copy is somewhere
-   else, such as a second Applications folder or inside
-   Library/Audio/Plug-Ins/Components, move only that older Swift Audio.app to the
-   Trash. Two copies of the same plug-in make hosts load the older build. This
-   step affects Swift Audio.app only; every other plug-in stays untouched.
+3. Keep exactly one Swift Audio.app on the Mac, inside Applications. Two copies
+   of the same plug-in make hosts load the older build. If you think a second
+   copy exists, send us its full path instead of moving files yourself. Never
+   move anything that is not named Swift Audio.app, and do not open or reorganise
+   any Plug-Ins folder; every other plug-in stays exactly where it is.
 4. Open Swift Audio once. Its window is a control preview, not a standalone
    audio player.
 5. Restart Logic Pro. On an audio track, choose:

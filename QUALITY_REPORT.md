@@ -1,6 +1,6 @@
 # Classical Room Reverb — implementation and QA
 
-Updated 2026-11-06 on macOS 26.3 / Apple Silicon / Swift 6.3.3. This review
+Updated 2026-11-08 on macOS 26.3 / Apple Silicon / Swift 6.3.3. This review
 describes the current product after moving from a multi-effect channel strip to
 a deliberately simple room reverb.
 
@@ -33,6 +33,10 @@ a deliberately simple room reverb.
   locked sound.
 - New tail-time regressions compare the reported tail with a measured decay, and
   check the reported tail is zero at Amount 0 and while bypassed.
+- The level test that used to read the removed meters now measures the rendered
+  samples instead: Amount 0 gives an untouched dry signal, Output −6.02 dB
+  halves it, bypass hands the input straight back, and reset restores the gain.
+  Mono and stereo are both covered. Test count stays at 51.
 - Full x86_64 Swift suite: **51 tests in four suites passed** under Rosetta.
 - Strict in-process and out-of-process `auval` validation passed, repeated three
   times with no failing check. `auval` right after a reinstall used to report
@@ -44,6 +48,13 @@ a deliberately simple room reverb.
   "Amount 42%" readout and a centred BYPASS pill. The reference's three extra
   knobs are absent by request. The host-visible Amount parameter reads 42 with a
   0–100 percent range, and the factory preset list is Classical Room.
+- The same offscreen render was run against the previous build and the current
+  one. Both PNGs are byte-identical (1,928,209 bytes, MD5 `e63a12cc…`), so the
+  simplification below changed no pixel of the editor.
+- Render cost was measured on both builds (48 kHz, stereo, 128-frame blocks,
+  20,000 blocks per sample): 85.0 µs before, 84.4 µs after. The removed metering
+  scans are a rounding error next to the comb filters; the benefit is code and
+  per-instance state, not measurable CPU.
 - Logic Pro playback and project save/reopen were not tested.
 
 ## Other plug-ins: audit result
@@ -53,16 +64,43 @@ a deliberately simple room reverb.
   `scripts/install-au.sh` refuses to overwrite an app with a different bundle
   identifier, and neither it nor `scripts/package-au.py` or `scripts/share-au.py`
   writes into `Library/Audio/Plug-Ins/Components`.
-- The AU registry and both Components folders were diffed before and after an
-  install: identical, with folder timestamps unchanged. `auval -s aufx` lists 23
-  effect units afterwards — the 22 Apple units plus ours — and no other vendor
-  uses the `swft`/`Oliv` codes, so nothing was displaced. This Mac has no
+- The AU registry (all six Audio Unit types), both Components folders and the
+  `pluginkit` list were captured before and after reinstalling the current
+  build. The only differences were this plug-in's own registration UUID and
+  timestamp. `auval -s aufx` lists 24 effect units afterwards — the 23 Apple
+  units plus ours — and no other vendor uses the `swft`/`Oliv` codes in any of
+  the six Audio Unit types, so nothing was displaced. This Mac has no
   third-party Audio Units, so that is the extent of what could be observed here.
 - The shipped instructions never asked anyone to remove other plug-ins. The
   current text says so explicitly, and adds the one real hazard found: a second
   copy of `Swift Audio.app` shares the bundle identifier, so a host can load the
-  older build. The installer now lists such copies and tells the user to move
-  only that older app away; nothing is deleted automatically.
+  older build. The installer now lists such copies; nothing is deleted
+  automatically, and the tester hand-out no longer tells anyone to move files
+  near a Plug-Ins folder — it asks for the path instead.
+- The remaining plausible mechanism is not deletion but a failed host scan. A
+  plug-in that traps while a host loads it can abort that host's Audio Unit
+  sweep, and the list then comes back short until the next rescan. This pass
+  removed the three ways our own code could trap: allocation failure now throws
+  an `OSStatus` error to the host instead of `fatalError` inside the extension
+  process, the atomic parameter store bounds every index (previously it only
+  looked safe because the count field it never checked was zeroed), and the
+  editor no longer force-unwraps the parameter tree.
+
+## Code removed in this pass
+
+- `Sources/UI/` and `Sources/App/` (the original standalone demo app and its
+  channel-strip panels, ~2,200 lines) plus their SwiftPM products. The AUv3
+  never linked them: Logic loads the framework through the app extension, and
+  `scripts/package-au.py` compiles only `AudioPlugin/HostApp/AppDelegate.swift`.
+- Metering that no surface displayed: `MeterSnapshot`, its second atomic store,
+  the six hidden meter addresses, `publishMeters`, and the two whole-buffer
+  peak scans in `PluginEngine.process`. The AU editor has one knob and a light.
+- Unused `SampleRate` enum, the never-rendered `ParameterValueField`, and the
+  host app's Edit menu that existed only for numeric fields that are gone.
+- Kept deliberately: the EQ, compressor and delay classes and their preset
+  types. Their AU parameter addresses are part of the saved-project contract, so
+  old Logic documents must keep decoding, and the DSP suite still tests them.
+  They are instantiated but never process audio in room mode.
 
 ## Known release gaps
 

@@ -54,8 +54,7 @@ plug-in stays where it is.
 
 Opening **Swift Audio.app** displays the plugin's controls for inspection. That
 window does not capture or play audio; use the plugin on a track in Logic for
-sound. The older `swift run SwiftAudioPlugin` interface remains a separate DSP/UI
-demo and is not the installed AU editor.
+sound. It hosts the same editor the AU shows inside Logic.
 
 By default the build contains the architecture of the Mac used to build it
 (arm64 on Apple Silicon, x86_64 on Intel). An explicit architecture can also be
@@ -107,7 +106,6 @@ implementation has not been formally certified for hard real-time safety.
 - `Sources/DSP/`: processing algorithms; the AU currently uses the fixed room reverb.
 - `Sources/Plugin/`: AU lifecycle, parameter/state handling and the AU editor.
 - `Sources/ParameterAtomics/`: C11 atomic storage shared by control/render threads.
-- `Sources/UI/`, `Sources/App/`: original standalone UI demo.
 - `AudioPlugin/`: host/extension entry points, metadata and extension entitlements.
 - `scripts/`: tests, local packaging and installation.
 - `Tests/DSPTests/`, `Tests/AudioUnitTests/`: DSP and AU integration tests.
@@ -123,7 +121,8 @@ Apple `auval` separately checks the installed component.
 - Logic Pro session playback and project reopening require testing in Logic itself;
   a successful `auval` run does not replace that host-specific check.
 - No VST3 or AAX wrapper. The AU packaging/editor are macOS-only.
-- The standalone demo does not implement a microphone/audio-device engine.
+- The `Swift Audio.app` preview window opens no audio device; it only displays
+  the AU editor.
 - There is no room-size, delay, EQ or compressor control on the plugin surface.
 - The limiter is sample-peak, not true-peak; Amount changes are not yet smoothed.
 - See [quality review](QUALITY_REPORT.md) for testing and distribution limitations.
@@ -132,18 +131,22 @@ MIT License. See `LICENSE`.
 
 ## Validation record
 
-Validated locally on 2026-11-06 with macOS 26.3, Apple Silicon and Swift 6.3.3:
+Validated locally on 2026-11-08 with macOS 26.3, Apple Silicon and Swift 6.3.3:
 
 - `swift build`: passed.
 - `bash scripts/test.sh`: 51 tests passed in four suites, and the same 51 passed
   for x86_64 under Rosetta.
 - `auval -v aufx swft Oliv -strict`: passed without warnings.
 - `auval -v aufx swft Oliv -oop -strict`: passed without warnings.
-- The AU registry and both `Library/Audio/Plug-Ins/Components` folders were
-  compared before and after installing: unchanged apart from this plugin.
-  `auval -s aufx` still lists all 22 Apple effect units alongside ours.
-- Updated Amount and bypass controls are in the custom AU editor; plugin layout
-  has been built for arm64 and x86_64.
+- The AU registry (all six Audio Unit types), both
+  `Library/Audio/Plug-Ins/Components` folders and the plug-in manager list were
+  compared before and after installing: the only differences were this plugin's
+  own registration id and timestamp. `auval -s aufx` lists all 23 Apple effect
+  units alongside ours.
+- The AU editor renders identically before and after the code removal: the
+  offscreen PNGs are byte-for-byte the same file.
+- Amount and bypass controls are in the custom AU editor; plugin layout has been
+  built for arm64 and x86_64.
 - Logic Pro playback/project-reopen testing was not performed.
 
 Local build/test/validation logs are generated in the ignored `Build/` folder.
@@ -165,6 +168,6 @@ python3 scripts/share-au.py --arch x86_64
 ```
 
 Produces `Build/SwiftAudioPlugin-quality-arm64.zip` or
-`Build/SwiftAudioPlugin-quality-Intel.zip` with the app, Serbian installation
-English installation instructions and the quality review. Signatures and architecture are checked
+`Build/SwiftAudioPlugin-quality-Intel.zip` with the app, English installation
+instructions and the quality review. Signatures and architecture are checked
 again after extracting the ZIP. These remain development builds.

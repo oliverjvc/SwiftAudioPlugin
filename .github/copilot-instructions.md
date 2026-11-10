@@ -5,7 +5,7 @@ This is a professional audio plugin project similar to Waves Audio plugins, buil
 
 ## Architecture
 - **DSP Core**: Audio processing algorithms (EQ, Compressor, Reverb)
-- **UI Layer**: SwiftUI-based professional audio plugin interface
+- **AU Editor**: SwiftUI interface hosted by the Audio Unit
 - **Plugin Host**: Audio Unit v3 wrapper for macOS DAW compatibility
 
 ## Development Guidelines
@@ -18,13 +18,12 @@ This is a professional audio plugin project similar to Waves Audio plugins, buil
 ```bash
 swift build          # Build the project
 swift test           # Run tests
-swift run            # Run standalone version
+bash scripts/build-au.sh   # Package the AUv3 app
 ```
 
 ## File Structure
 - `Sources/DSP/` - Audio processing algorithms
-- `Sources/UI/` - SwiftUI components
-- `Sources/Plugin/` - Audio Unit wrapper
+- `Sources/Plugin/` - Audio Unit wrapper and AU editor
 - `Tests/` - Unit tests
 
 ## Cross-Platform Notes
