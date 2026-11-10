@@ -54,7 +54,9 @@ a deliberately simple room reverb.
   identifier, and neither it nor `scripts/package-au.py` or `scripts/share-au.py`
   writes into `Library/Audio/Plug-Ins/Components`.
 - The AU registry and both Components folders were diffed before and after an
-  install: identical, with folder timestamps unchanged. This Mac has no
+  install: identical, with folder timestamps unchanged. `auval -s aufx` lists 23
+  effect units afterwards — the 22 Apple units plus ours — and no other vendor
+  uses the `swft`/`Oliv` codes, so nothing was displaced. This Mac has no
   third-party Audio Units, so that is the extent of what could be observed here.
 - The shipped instructions never asked anyone to remove other plug-ins. The
   current text says so explicitly, and adds the one real hazard found: a second

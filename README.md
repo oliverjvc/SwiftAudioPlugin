@@ -141,6 +141,7 @@ Validated locally on 2026-11-06 with macOS 26.3, Apple Silicon and Swift 6.3.3:
 - `auval -v aufx swft Oliv -oop -strict`: passed without warnings.
 - The AU registry and both `Library/Audio/Plug-Ins/Components` folders were
   compared before and after installing: unchanged apart from this plugin.
+  `auval -s aufx` still lists all 22 Apple effect units alongside ours.
 - Updated Amount and bypass controls are in the custom AU editor; plugin layout
   has been built for arm64 and x86_64.
 - Logic Pro playback/project-reopen testing was not performed.
