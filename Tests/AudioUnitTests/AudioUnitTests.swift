@@ -56,16 +56,18 @@ struct AudioUnitTests {
 
     @Test func factoryPresetChangesParameters() throws {
         let unit = try makeUnit()
-        unit.currentPreset = unit.factoryPresets![3]
-        #expect(unit.parameterTree!.parameter(withAddress: 20)!.value == 0.8)
-        #expect(unit.parameterTree!.parameter(withAddress: 32)!.value == 0.5)
         unit.currentPreset = unit.factoryPresets![0]
-        #expect(unit.parameterTree!.parameter(withAddress: 20)!.value == 0.5)
+        #expect(unit.factoryPresets?.map(\.name) == ["Classical Room"])
+        #expect(unit.parameterTree!.parameter(withAddress: 3)!.value == 42)
+        unit.parameterTree!.parameter(withAddress: 3)!.value = 100
+        unit.currentPreset = unit.factoryPresets![0]
+        #expect(unit.parameterTree!.parameter(withAddress: 3)!.value == 42)
     }
 
     @Test func parametersAndStateRoundTrip() throws {
         let unit = try makeUnit()
-        #expect(unit.parameterTree?.allParameters.count == 50)
+        #expect(unit.parameterTree?.allParameters.count == 51)
+        #expect(unit.parameterTree?.parameter(withAddress: 3)?.value == 42)
         unit.parameterTree?.parameter(withAddress: 51)?.value = 8
         unit.parameterTree?.parameter(withAddress: 30)?.value = 650
         let restored = try makeUnit()
@@ -183,29 +185,6 @@ struct AudioUnitTests {
         #expect(unit.meterSnapshot.inputLeft == -100)
     }
 
-    @Test @MainActor func comparisonPreservesBothSlotsAndCopy() throws {
-        let unit = try makeUnit()
-        let model = ParameterModel(unit: unit)
-        let output = ParameterSpec.all.first { $0.address == 1 }!
-        model.binding(output).wrappedValue = -3
-        model.selectComparison(1)
-        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == 0)
-        model.binding(output).wrappedValue = -9
-        model.selectComparison(0)
-        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -3)
-        model.selectComparison(1)
-        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -9)
-        // Host automation must be captured too, even before the next UI poll.
-        unit.parameterTree!.parameter(withAddress: 1)!.value = -12
-        model.copyComparison()
-        model.selectComparison(0)
-        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -12)
-        model.loadPreset(unit.factoryPresets![1])
-        #expect(model.values[10] == -18)
-        model.selectComparison(1)
-        #expect(unit.parameterTree!.parameter(withAddress: 1)!.value == -12)
-    }
-
     @Test func extremeParametersStayFiniteAndLimited() throws {
         let unit = try makeUnit()
         for spec in ParameterSpec.all where spec.address != 2 {
@@ -234,6 +213,46 @@ struct AudioUnitTests {
         let mean = durations.reduce(0, +) / Double(durations.count)
         print(String(format: "RENDER DIAGNOSTIC 48kHz/128: mean %.3f ms, p95 %.3f ms, max %.3f ms; buffer budget 2.667 ms (includes harness)",
                      mean * 1000, durations[949] * 1000, durations.last! * 1000))
+    }
+
+    @Test func amountIsABoundedRoomReverbControlAndLocksStripSettings() throws {
+        let unit = try makeUnit()
+        let amount = unit.parameterTree!.parameter(withAddress: 3)!
+        #expect(amount.minValue == 0)
+        #expect(amount.maxValue == 100)
+        #expect(amount.value == 42)
+        // Former channel-strip controls remain in project state, but no longer
+        // affect this focused reverb product.
+        unit.parameterTree!.parameter(withAddress: 51)!.value = 24
+        unit.parameterTree!.parameter(withAddress: 30)!.value = 1900
+        unit.parameterTree!.parameter(withAddress: 11)!.value = 20
+        amount.value = 0
+        let dry = try render(unit)
+        #expect(dry[0].allSatisfy { abs($0 - 0.1) < 0.000001 })
+
+        amount.value = 100
+        var wet: [[Float]] = []
+        for block in 0..<12 {
+            wet = try render(unit, frames: 512, time: Double(block * 512))
+        }
+        #expect(wet[0].contains { abs($0 - 0.1) > 0.0001 })
+        #expect(wet.flatMap { $0 }.allSatisfy { $0.isFinite })
+    }
+
+    @Test func tailTimeReportsTheLockedRoomDecay() throws {
+        let unit = try makeUnit()
+        let tail = unit.tailTime
+        // Hosts append this to every bounce, so it must be the real decay
+        // rather than a blanket maximum.
+        #expect(tail > 0.5)
+        #expect(tail < 10)
+        unit.parameterTree!.parameter(withAddress: 3)!.value = 0
+        #expect(unit.tailTime == 0)
+        unit.parameterTree!.parameter(withAddress: 3)!.value = 42
+        unit.parameterTree!.parameter(withAddress: 2)!.value = 1
+        #expect(unit.tailTime == 0)
+        unit.parameterTree!.parameter(withAddress: 2)!.value = 0
+        #expect(unit.tailTime == tail)
     }
 
 }

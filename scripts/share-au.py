@@ -39,31 +39,51 @@ with tempfile.TemporaryDirectory(prefix='share-au-', dir=build) as temporary:
     staging = Path(temporary) / folder_name
     staging.mkdir()
     run('ditto', source, staging / 'Swift Audio.app')
-    machine = 'Intel Mac' if args.arch == 'x86_64' else 'Apple Silicon Mac (M1 ili noviji)'
-    (staging / 'PROCITAJ-PRVO.txt').write_text(f'''SWIFT AUDIO — probna verzija za {machine}
-Zahtevi: macOS 13 ili noviji, kompatibilan AU host (npr. Logic Pro).
+    machine = 'an Intel Mac' if args.arch == 'x86_64' else 'an Apple Silicon Mac (M1 or later)'
+    hardware_note = (
+        'This Intel build was tested through Rosetta, not on a physical Intel Mac.'
+        if args.arch == 'x86_64'
+        else 'This build was validated natively on Apple Silicon, not yet in a '
+             'Logic Pro session.'
+    )
+    (staging / 'README-FIRST.txt').write_text(f'''SWIFT AUDIO — Test Build for {machine}
 
-1. Zatvori Logic i staru aplikaciju Swift Audio ako su otvoreni.
-2. Raspakuj ZIP i premesti celu Swift Audio.app u Applications, zamenjujuci
-   prethodnu Swift Audio verziju ako je imas. Zadrzi samo jednu instalaciju.
-3. Otvori Swift Audio jednom. Prozor je pregled kontrola, ne samostalni audio plejer.
-4. Ponovo pokreni Logic. Audio FX > Audio Units > OliverJ > Swift Audio Plugin.
-   Ako nije vidljiv, sacekaj registraciju i ponovi scan u Plug-in Manager-u.
-5. Aplikacija mora ostati instalirana: AUv3 plugin je unutar nje.
+Requirements: macOS 13 or later, and an Audio Unit host such as Logic Pro.
 
-Ovo je ad-hoc potpisan razvojni build, bez Apple notarizacije. Ako macOS blokira
-aplikaciju kojoj verujes, potrazi Open Anyway u System Settings > Privacy & Security.
-Ako nema te opcije ili prijavi da je aplikacija ostecena, posalji tacan tekst greske.
+1. Quit Logic Pro and any older copy of Swift Audio.
+2. Unzip this file and move the entire Swift Audio.app into Applications. If
+   prompted, replace only an older Swift Audio.app. Do not remove or replace any
+   other audio plug-ins.
+3. Keep exactly one Swift Audio.app on the Mac. If an older copy is somewhere
+   else, such as a second Applications folder or inside
+   Library/Audio/Plug-Ins/Components, move only that older Swift Audio.app to the
+   Trash. Two copies of the same plug-in make hosts load the older build. This
+   step affects Swift Audio.app only; every other plug-in stays untouched.
+4. Open Swift Audio once. Its window is a control preview, not a standalone
+   audio player.
+5. Restart Logic Pro. On an audio track, choose:
+   Audio FX > Audio Units > OliverJ > Swift Audio Plugin.
+   If it is not visible, wait briefly for macOS to register it, then check this
+   plug-in in Logic's Plug-in Manager. Do not delete other plug-ins or move them
+   into or out of Logic's Components folder.
+6. Keep Swift Audio.app installed. The AUv3 plug-in is contained inside the app.
 
-Novo: ispravljen soft knee kompresora i reverb pre-delay; stereo peak/GR meraci,
-fabricki preseti, A/B poređenje, Copy i precizan unos brojeva. A/B slotovi traju
-dok je editor otvoren. Aktivna podesavanja cuva Logic u projektu.
-Promene preseta i nagla automatizacija jos mogu izazvati klikove.
+This is an ad-hoc signed development build and is not Apple-notarized. If macOS
+blocks an app you trust, look for Open Anyway in System Settings > Privacy &
+Security. If that option is unavailable or macOS says the app is damaged, send
+us the exact error message.
 
-Za probu: proveri mono/stereo, bypass, automatizaciju, cuvanje/otvaranje projekta
-i offline bounce. Navedi model Maca, macOS, Logic verziju i konkretne korake za problem.
-Intel je testiran kroz Rosettu; fizicki Intel i Logic sesije jos nisu provereni.
-Detalji provere i ogranicenja su u QUALITY_REPORT.md.
+The interface has a single 0–100% Amount knob and bypass. The room reverb
+settings are fixed, and a safety limiter protects the output. Logic can automate
+Amount and saves it with the project. The Amount control is not yet smoothed, so
+rapid changes may click.
+
+For testing, please check mono and stereo tracks, bypass, automation, saving and
+reopening a project, and offline bounce. When reporting an issue, include your
+Mac model, macOS version, Logic version, and exact steps to reproduce it.
+
+{hardware_note} See QUALITY_REPORT.md for the full validation record and known
+limitations.
 ''', encoding='utf-8')
     shutil.copy2(root / 'QUALITY_REPORT.md', staging)
     run('ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', staging, archive)

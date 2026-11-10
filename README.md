@@ -1,10 +1,9 @@
 # Swift Audio Plugin
 
-A Swift audio channel strip for macOS: five-band EQ, compressor, stereo delay,
-algorithmic reverb and limiter. The Audio Unit v3 build is intended for Logic Pro
-and includes a custom SwiftUI editor, 50 automatable parameters, four factory
-presets and project/preset state restoration. The editor includes stereo peak
-meters, gain-reduction readouts, A/B comparison and direct numeric entry.
+A focused room reverb Audio Unit for Logic Pro. Its wood-inspired editor has one
+Amount knob (0–100%) and bypass. Room character is fixed to a tuned classical
+room; a fixed peak limiter protects the output. The Amount control is host
+automatable and existing project state continues to load.
 
 ## Build and test
 
@@ -35,15 +34,23 @@ auval -v aufx swft Oliv -oop -strict
 The build script creates `Build/Swift Audio.app`, containing the AUv3 extension
 and its embedded framework. It uses Command Line Tools; a full Xcode installation
 is not needed. The installer copies it to `~/Applications/Swift Audio.app` and
-registers the extension. Initial macOS Audio Unit discovery can take a minute.
-If the first validation says the component is missing, check `auval -a` and retry
-once **OliverJ: Swift Audio Plugin** appears.
+registers the extension. Initial macOS Audio Unit discovery can take a minute;
+the installer waits until the component is listed before it reports success. If a
+host still says the plugin is missing, check `auval -s aufx` and retry once
+**OliverJ: Swift Audio Plugin** appears.
 
 Restart Logic Pro after installation. On an audio channel, choose an **Audio FX**
 slot, then **Audio Units → OliverJ → Swift Audio Plugin**. Mono and stereo channels
 are supported. If necessary, rescan this plugin in Logic's Plug-in Manager.
 Keep the containing app installed: this is an AUv3 extension, not a `.component`
-file to copy into `Library/Audio/Plug-Ins/Components`.
+file to copy into `Library/Audio/Plug-Ins/Components`. Installing it does not
+require deleting or replacing any other Audio Units.
+
+Keep exactly one `Swift Audio.app` on the Mac. Two bundles sharing the identifier
+let a host load the older build, so the installer lists any other copy it finds in
+`/Applications` or in a Components folder and tells you to move only that older
+`Swift Audio.app` away. It never deletes anything itself; every other audio
+plug-in stays where it is.
 
 Opening **Swift Audio.app** displays the plugin's controls for inspection. That
 window does not capture or play audio; use the plugin on a track in Logic for
@@ -74,41 +81,30 @@ distribution, use Developer ID signing and notarization.
 
 ## Audio Unit controls
 
-- **Main:** input/output gain and bypass.
-- **Equalizer:** five peak bands, each with frequency, gain, Q and enable controls.
-- **Compressor:** threshold, ratio, attack, release, makeup, knee and enable.
-- **Delay:** separate left/right times, feedback, wet/dry, ping-pong, filters and enable.
-- **Reverb:** room size, damping, wet/dry, stereo width, pre-delay and enable.
-- **Limiter:** ceiling, release and enable.
+- **Amount:** 0–100% level of a fixed, stereo room reverb.
+- **Bypass:** temporarily returns the unprocessed signal.
 
-Use the Factory presets menu to load a starting point. A/B compares all current
-parameter values; Copy A → B (or B → A) initializes the other slot. Comparison
-slots last while the editor is open. Type a number and press Return (or leave the
-field) to commit; right-click a numeric control to reset its default. Input/output
-meters show dBFS and the COMP/LIMIT readouts show gain reduction in dB.
-
-Factory presets: Default, Warm Vocal, Punchy Drums and Ambient Pad. Logic can
-save the exposed parameters in projects and Audio Unit presets. The AU delay
-uses milliseconds; the DSP library's optional tempo-sync controls and EQ filter
-types are not exposed in this version's AU editor.
+Turn the knob vertically to adjust the amount. Logic automation and project save
+and restore work through the host's 0–100% Amount parameter. The sole factory
+preset is Classical Room.
 
 Signal flow:
 
 ```
-Input → Input Gain → EQ → Compressor → Delay → Reverb → Output Gain → Limiter → Output
+Input → Room Reverb (fixed room, pre-delay and width) → Output → Safety Limiter
 ```
 
 The AU negotiates matching mono or stereo planar Float32 input/output, from
 8 kHz through 192 kHz. Delay/reverb storage is recreated at resource allocation
 for the negotiated sample rate. Render buffers are allocated ahead of time.
-UI/host values cross to the render thread through lock-free scalar atomics; the
-render thread owns the DSP engine. Scheduled changes and ramps are processed at
-sample offsets. This Swift implementation has not been formally certified for
-hard real-time safety.
+The master Amount is a normalized 0–100% AU parameter. UI/host values cross to the
+render thread through lock-free scalar atomics; the render thread owns the DSP
+engine. Scheduled changes and ramps are processed at sample offsets. This Swift
+implementation has not been formally certified for hard real-time safety.
 
 ## Source layout
 
-- `Sources/DSP/`: processing algorithms and standalone preset serialization.
+- `Sources/DSP/`: processing algorithms; the AU currently uses the fixed room reverb.
 - `Sources/Plugin/`: AU lifecycle, parameter/state handling and the AU editor.
 - `Sources/ParameterAtomics/`: C11 atomic storage shared by control/render threads.
 - `Sources/UI/`, `Sources/App/`: original standalone UI demo.
@@ -118,8 +114,9 @@ hard real-time safety.
 
 The AU tests cover state serialization, mono/stereo gain and bypass, variable
 block sizes, scheduled changes, ramps crossing blocks, null output buffers,
-format rejection, resource reallocation and render blocks cached before
-allocation. Apple `auval` separately checks the installed component.
+format rejection, resource reallocation, render blocks cached before
+allocation, and a reported tail time that matches the measured reverb decay.
+Apple `auval` separately checks the installed component.
 
 ## Limitations
 
@@ -127,22 +124,25 @@ allocation. Apple `auval` separately checks the installed component.
   a successful `auval` run does not replace that host-specific check.
 - No VST3 or AAX wrapper. The AU packaging/editor are macOS-only.
 - The standalone demo does not implement a microphone/audio-device engine.
-- The AU has peak/GR meters but no spectrum analyzer or graphical EQ curve.
-- The limiter is sample-peak, not true-peak. Abrupt parameter/preset/bypass changes
-  are not yet smoothed. See [quality review](QUALITY_REPORT.md) for remaining gaps.
+- There is no room-size, delay, EQ or compressor control on the plugin surface.
+- The limiter is sample-peak, not true-peak; Amount changes are not yet smoothed.
+- See [quality review](QUALITY_REPORT.md) for testing and distribution limitations.
 
 MIT License. See `LICENSE`.
 
 ## Validation record
 
-Validated locally on 2026-10-20 with macOS 26.3, Apple Silicon and Swift 6.3.3:
+Validated locally on 2026-11-06 with macOS 26.3, Apple Silicon and Swift 6.3.3:
 
 - `swift build`: passed.
-- `bash scripts/test.sh`: 49 tests passed in four suites.
+- `bash scripts/test.sh`: 51 tests passed in four suites, and the same 51 passed
+  for x86_64 under Rosetta.
 - `auval -v aufx swft Oliv -strict`: passed without warnings.
 - `auval -v aufx swft Oliv -oop -strict`: passed without warnings.
-- Installed bundle code signatures verified; preview controls visually checked,
-  including a compressor parameter change and restoration.
+- The AU registry and both `Library/Audio/Plug-Ins/Components` folders were
+  compared before and after installing: unchanged apart from this plugin.
+- Updated Amount and bypass controls are in the custom AU editor; plugin layout
+  has been built for arm64 and x86_64.
 - Logic Pro playback/project-reopen testing was not performed.
 
 Local build/test/validation logs are generated in the ignored `Build/` folder.
@@ -165,5 +165,5 @@ python3 scripts/share-au.py --arch x86_64
 
 Produces `Build/SwiftAudioPlugin-quality-arm64.zip` or
 `Build/SwiftAudioPlugin-quality-Intel.zip` with the app, Serbian installation
-instructions and the quality review. Signatures and architecture are checked
+English installation instructions and the quality review. Signatures and architecture are checked
 again after extracting the ZIP. These remain development builds.

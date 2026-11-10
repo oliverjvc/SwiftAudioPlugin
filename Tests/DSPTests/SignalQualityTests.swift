@@ -42,6 +42,27 @@ struct SignalQualityTests {
         #expect(zip(immediate, delayed.dropFirst(480)).allSatisfy { abs($0 - $1) < 0.000001 })
     }
 
+    @Test func reverbTailEstimateTracksMeasuredDecay() {
+        let sampleRate = 48000.0
+        let reverb = Reverb(sampleRate: sampleRate)
+        reverb.roomSize = 0.68
+        reverb.damping = 0.62
+        reverb.width = 0.82
+        reverb.preDelay = 24
+        reverb.dryLevel = 0
+        reverb.wetLevel = 1
+        var buffer = AudioBuffer(frameCount: Int(sampleRate * 8), channelCount: 1)
+        buffer.samples[0] = 1
+        reverb.process(&buffer)
+        let peak = buffer.samples.map(abs).max()!
+        let lastLoud = buffer.samples.lastIndex { abs($0) >= peak * 0.001 } ?? 0
+        let measured = Double(lastLoud + 1) / sampleRate
+        let estimate = reverb.estimatedTailSeconds
+        #expect(measured > 0.2)
+        #expect(measured <= estimate)
+        #expect(estimate - measured < 2.0)
+    }
+
     @Test func limiterProtectsBothChannelsAtChangingLevels() {
         let limiter = Limiter(sampleRate: 48000)
         limiter.ceiling = -1

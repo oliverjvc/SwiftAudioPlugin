@@ -208,6 +208,8 @@ public class PluginEngine: PlatformObservable {
     public var inputGain: Float = 0.0    // dB
     public var outputGain: Float = 0.0   // dB
     public var isBypassed: Bool = false
+    /// AU product mode: a tuned room reverb controlled by one wet-level parameter.
+    public var roomReverbMode = false
     
     public var currentPreset: PluginPreset?
     public var presets: [PluginPreset] = []
@@ -243,6 +245,18 @@ public class PluginEngine: PlatformObservable {
         // Input meters show the incoming signal, including while bypassed.
         updateInputMeters(buffer)
         guard !isBypassed else {
+            updateOutputMeters(buffer)
+            return
+        }
+
+        if roomReverbMode {
+            reverb.process(&buffer)
+            let outGainLinear = AudioUtils.dBToLinear(outputGain)
+            for i in 0..<(buffer.frameCount * buffer.channelCount) {
+                buffer.samples[i] *= outGainLinear
+            }
+            // Keep a fixed safety ceiling after the wet effect and output gain.
+            limiter.process(&buffer)
             updateOutputMeters(buffer)
             return
         }

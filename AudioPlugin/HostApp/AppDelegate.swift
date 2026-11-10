@@ -30,8 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let controller = SwiftAudioUnitViewController()
             _ = try controller.createAudioUnit(with: SwiftAudioPluginFactory.componentDescription)
             let window = NSWindow(contentViewController: controller)
-            window.title = "Swift Audio — Controls Preview (use Logic Pro for audio)"
-            window.setContentSize(NSSize(width: 760, height: 640))
+            window.title = "Classical Room Reverb — Controls Preview (use Logic Pro for audio)"
+            window.setContentSize(NSSize(width: 640, height: 700))
             window.center()
             window.makeKeyAndOrderFront(nil)
             self.controller = controller

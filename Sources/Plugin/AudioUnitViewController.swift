@@ -17,11 +17,11 @@ public final class SwiftAudioUnitViewController: AUViewController, AUAudioUnitFa
         return created
     }
     public override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 760, height: 640))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 700))
     }
     public override func viewDidLoad() {
         super.viewDidLoad()
-        preferredContentSize = NSSize(width: 760, height: 640)
+        preferredContentSize = NSSize(width: 640, height: 700)
         if let unit { showControls(for: unit) }
     }
     private func showControls(for unit: SwiftAudioUnit) {
@@ -42,41 +42,16 @@ public final class SwiftAudioUnitViewController: AUViewController, AUAudioUnitFa
 final class ParameterModel: ObservableObject {
     let unit: SwiftAudioUnit
     @Published var values: [AUParameterAddress: Float] = [:]
-    @Published var activeSlot = 0
-    @Published var meters: MeterSnapshot
-    private var comparisons: [[AUParameterAddress: Float]] = []
     private var token: AUParameterObserverToken?
     init(unit: SwiftAudioUnit) {
         self.unit = unit
-        self.meters = unit.meterSnapshot
         for parameter in unit.parameterTree!.allParameters { values[parameter.address] = parameter.value }
-        comparisons = [values, values]
         token = unit.parameterTree?.token(byAddingParameterObserver: { [weak self] address, value in
             DispatchQueue.main.async { self?.values[address] = value }
         })
     }
     deinit { if let token { unit.parameterTree?.removeParameterObserver(token) } }
-    func selectComparison(_ slot: Int) {
-        guard (0...1).contains(slot), slot != activeSlot else { return }
-        refreshAutomation()
-        comparisons[activeSlot] = values
-        for (address, value) in comparisons[slot] {
-            unit.parameterTree?.parameter(withAddress: address)?.setValue(value, originator: token)
-        }
-        unit.currentPreset = nil
-        activeSlot = slot
-        refreshAutomation()
-    }
-    func copyComparison() {
-        refreshAutomation()
-        comparisons[1 - activeSlot] = values
-    }
-    func loadPreset(_ preset: AUAudioUnitPreset) {
-        unit.currentPreset = preset
-        refreshAutomation()
-    }
     func refreshAutomation() {
-        meters = unit.meterSnapshot
         // Scheduled render events update atomic values without calling UI observers on the audio thread.
         for parameter in unit.parameterTree!.allParameters {
             let current = parameter.value
@@ -121,128 +96,169 @@ private struct ParameterValueField: View {
 
 private struct PluginControls: View {
     @ObservedObject var model: ParameterModel
-    @State private var selected = "Equalizer"
-    private let accent = Color(red: 0.32, green: 0.84, blue: 0.76)
+    private let wood = Color(red: 0.82, green: 0.70, blue: 0.54)
+    private var amount: Binding<Float> {
+        let parameter = model.binding(ParameterSpec.all.first { $0.address == 3 }!)
+        return Binding(get: { parameter.wrappedValue / 100 },
+                       set: { parameter.wrappedValue = $0 * 100 })
+    }
+    private var bypassed: Bool { (model.values[2] ?? 0) >= 0.5 }
+
     var body: some View {
-        VStack(spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("SWIFT AUDIO").font(.system(size: 23, weight: .bold, design: .rounded))
-                    Text("CHANNEL STRIP  /  OLIVER J").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Toggle("Bypass", isOn: Binding(get: { (model.values[2] ?? 0) >= 0.5 }, set: {
-                    model.binding(ParameterSpec.all.first { $0.address == 2 }!).wrappedValue = $0 ? 1 : 0
-                })).toggleStyle(.switch)
-            }
+        VStack(spacing: 0) {
             HStack {
-                Menu("Factory presets") {
-                    ForEach(model.unit.factoryPresets ?? [], id: \.number) { preset in
-                        Button(preset.name) { model.loadPreset(preset) }
-                    }
-                }.frame(width: 180)
                 Spacer()
-                Picker("Compare", selection: Binding(get: { model.activeSlot }, set: { model.selectComparison($0) })) {
-                    Text("A").tag(0)
-                    Text("B").tag(1)
-                }.pickerStyle(.segmented).frame(width: 130)
-                Button(model.activeSlot == 0 ? "Copy A → B" : "Copy B → A") { model.copyComparison() }
-                    .help("Copy current settings into the other comparison slot. A/B slots last while this editor is open.")
+                Text("Logic Pro")
+                    .font(.system(size: 12, weight: .regular)).tracking(0.2)
+                    .foregroundStyle(Color(red: 0.30, green: 0.21, blue: 0.14).opacity(0.85))
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Color.brown.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
             }
-            HStack(spacing: 18) {
-                levelMeter("IN L", value: model.meters.inputLeft)
-                levelMeter("IN R", value: model.meters.inputRight)
-                levelMeter("OUT L", value: model.meters.outputLeft)
-                levelMeter("OUT R", value: model.meters.outputRight)
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(String(format: "COMP  −%.1f dB", model.meters.compressorReduction))
-                    Text(String(format: "LIMIT −%.1f dB", model.meters.limiterReduction))
-                }.font(.system(size: 10, design: .monospaced)).frame(width: 115)
+            .padding(.top, 30).padding(.horizontal, 32)
+
+            Text("Classical Room Reverb")
+                .font(.system(size: 44, weight: .regular, design: .serif))
+                .foregroundStyle(Color(red: 0.33, green: 0.19, blue: 0.11))
+                .minimumScaleFactor(0.75).lineLimit(1).padding(.top, 18)
+
+            Spacer(minLength: 30)
+            HStack(spacing: 40) {
+                AmountDial(value: amount)
+                Circle()
+                    .fill(bypassed ? Color(red: 0.48, green: 0.40, blue: 0.32) : Color(red: 0.25, green: 0.82, blue: 0.22))
+                    .frame(width: 26, height: 26)
+                    .overlay(Circle().fill(.white.opacity(bypassed ? 0.15 : 0.6)).frame(width: 10, height: 10).offset(x: -4, y: -4))
+                    .shadow(color: bypassed ? .clear : .green.opacity(0.65), radius: 12)
+                    .accessibilityHidden(true)
             }
-            HStack(spacing: 30) {
-                parameterRow(ParameterSpec.all[0])
-                parameterRow(ParameterSpec.all[1])
+            Text("Amount")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(Color(red: 0.25, green: 0.16, blue: 0.10)).padding(.top, 26)
+            Text("\(Int((amount.wrappedValue * 100).rounded()))%")
+                .font(.system(size: 13, weight: .regular, design: .monospaced))
+                .foregroundStyle(Color(red: 0.42, green: 0.30, blue: 0.21).opacity(0.8)).padding(.top, 4)
+
+            Spacer(minLength: 30)
+            Button(bypassed ? "BYPASS · OFF" : "BYPASS") {
+                model.binding(ParameterSpec.all.first { $0.address == 2 }!).wrappedValue = bypassed ? 0 : 1
             }
-            Divider()
-            Picker("Processor", selection: $selected) {
-                ForEach(ParameterSpec.groups.dropFirst(), id: \.self) { Text($0).tag($0) }
-            }.pickerStyle(.segmented).labelsHidden()
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 30), GridItem(.flexible())], spacing: 18) {
-                    ForEach(ParameterSpec.all.filter { $0.group == selected }, id: \.address) { spec in
-                        parameterRow(spec)
-                    }
-                }.padding(.vertical, 8)
+            .font(.system(size: 14, weight: .regular)).tracking(1.2)
+            .foregroundStyle(Color(red: 0.36, green: 0.27, blue: 0.19))
+            .buttonStyle(.plain)
+            .padding(.horizontal, 30).padding(.vertical, 11)
+            .background {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.brown.opacity(0.07))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.brown.opacity(0.45), lineWidth: 1.2))
             }
-            HStack {
-                Text("5-BAND EQ  →  COMP  →  DELAY  →  REVERB  →  LIMITER")
-                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
-                Spacer()
-                Text("AUDIO UNIT").font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundStyle(accent)
-            }
+            .help("Temporarily bypass the room reverb")
+            .padding(.bottom, 34)
         }
-        .padding(24)
-        .frame(minWidth: 620, minHeight: 560)
-        .background(Color(red: 0.07, green: 0.09, blue: 0.12))
-        .tint(accent)
-        .environment(\.colorScheme, .dark)
-        .preferredColorScheme(.dark)
+        .padding(.horizontal, 28)
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 620, idealHeight: 700)
+        .background {
+            RoundedRectangle(cornerRadius: 27)
+                .fill(LinearGradient(colors: [Color(red: 0.96, green: 0.88, blue: 0.74), wood,
+                                              Color(red: 0.88, green: 0.77, blue: 0.61)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay { WoodGrain().clipShape(RoundedRectangle(cornerRadius: 27)) }
+                .overlay(RoundedRectangle(cornerRadius: 27).stroke(.white.opacity(0.7), lineWidth: 1.4))
+                .shadow(color: Color(red: 0.29, green: 0.19, blue: 0.11).opacity(0.28), radius: 25, y: 13)
+        }
+        .padding(16).background(Color(red: 0.95, green: 0.94, blue: 0.91))
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             model.refreshAutomation()
         }
     }
-    @ViewBuilder private func parameterRow(_ spec: ParameterSpec) -> some View {
-        if spec.unit == .boolean {
-            Toggle(spec.name, isOn: Binding(get: { model.binding(spec).wrappedValue >= 0.5 }, set: {
-                model.binding(spec).wrappedValue = $0 ? 1 : 0
-            })).toggleStyle(.switch).frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            VStack(spacing: 5) {
-                HStack {
-                    Text(spec.name).font(.system(size: 11, weight: .medium))
-                    Spacer()
-                    ParameterValueField(name: spec.name, value: model.binding(spec))
-                        .foregroundStyle(accent).frame(width: 72)
-                    Text(suffix(spec)).font(.system(size: 10)).foregroundStyle(.secondary)
+}
+
+private struct AmountDial: View {
+    @Binding var value: Float
+    @State private var dragOrigin: Float?
+    private let size: CGFloat = 214
+
+    var body: some View {
+        ZStack {
+            Canvas { context, canvasSize in
+                let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+                for index in 0...40 {
+                    let progress = Double(index) / 40
+                    let angle = (-225 + 270 * progress) * Double.pi / 180
+                    let inner = CGFloat(index % 5 == 0 ? 103 : 106)
+                    let outer: CGFloat = 112
+                    var path = Path()
+                    path.move(to: CGPoint(x: center.x + inner * cos(angle), y: center.y + inner * sin(angle)))
+                    path.addLine(to: CGPoint(x: center.x + outer * cos(angle), y: center.y + outer * sin(angle)))
+                    let color = progress <= Double(value)
+                        ? Color(red: 0.36, green: 0.22, blue: 0.12).opacity(0.8)
+                        : Color(red: 0.45, green: 0.33, blue: 0.23).opacity(0.48)
+                    context.stroke(path, with: .color(color), lineWidth: index % 5 == 0 ? 2.2 : 1.3)
                 }
-                if spec.unit == .hertz {
-                    Slider(value: Binding(get: { log10(model.binding(spec).wrappedValue) }, set: {
-                        model.binding(spec).wrappedValue = pow(10, $0)
-                    }), in: log10(spec.range.lowerBound)...log10(spec.range.upperBound))
-                        .accessibilityLabel(spec.name)
-                } else {
-                    Slider(value: model.binding(spec), in: spec.range).accessibilityLabel(spec.name)
+            }
+            Circle()
+                .fill(LinearGradient(colors: [Color(red: 0.20, green: 0.18, blue: 0.16),
+                                              Color(red: 0.09, green: 0.09, blue: 0.09),
+                                              Color(red: 0.16, green: 0.14, blue: 0.12)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: size - 34, height: size - 34)
+                .overlay(Circle().stroke(Color(red: 0.77, green: 0.66, blue: 0.51).opacity(0.85), lineWidth: 2))
+                .overlay {
+                    Capsule().fill(LinearGradient(colors: [.white, Color(red: 0.75, green: 0.68, blue: 0.56)],
+                                                  startPoint: .top, endPoint: .bottom))
+                        .frame(width: 4, height: 29).offset(y: -(size / 2 - 51))
+                        .rotationEffect(.degrees(Double(-135 + 270 * value)))
                 }
-            }.contextMenu {
-                Button("Reset to default") { model.binding(spec).wrappedValue = spec.initial }
+                .shadow(color: .black.opacity(0.47), radius: 12, y: 8)
+                .overlay(Circle().stroke(.white.opacity(0.14), lineWidth: 1).padding(7))
+        }
+        .frame(width: size, height: size).contentShape(Circle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { gesture in
+                if dragOrigin == nil { dragOrigin = value }
+                value = min(1, max(0, (dragOrigin ?? value) - Float(gesture.translation.height / 230)))
+            }
+            .onEnded { _ in dragOrigin = nil })
+        .accessibilityElement().accessibilityLabel("Reverb Amount")
+        .accessibilityValue("\(Int((value * 100).rounded())) percent")
+        .accessibilityHint("Drag vertically or use the accessibility controls to change reverb amount")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: value = min(1, value + 0.01)
+            case .decrement: value = max(0, value - 0.01)
+            @unknown default: break
             }
         }
     }
-    private func levelMeter(_ name: String, value: Float) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(name)
-                Spacer()
-                Text(value < -60 ? "−∞" : String(format: "%.1f", value))
-            }.font(.system(size: 9, design: .monospaced))
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.1))
-                    Capsule().fill(value >= 0 ? Color.red : accent)
-                        .frame(width: geometry.size.width * CGFloat(min(1, max(0, (value + 60) / 60))))
+}
+
+private struct WoodGrain: View {
+    var body: some View {
+        Canvas { context, size in
+            for row in 0..<66 {
+                let y = CGFloat(row) * 11 + 4
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: y))
+                let segments = 12
+                for segment in 0..<segments {
+                    let x = size.width * CGFloat(segment + 1) / CGFloat(segments)
+                    let seed = Double(row * 37 + segment * 19)
+                    let wave = CGFloat(sin(seed * 0.41) * 4.2 + cos(seed * 0.13) * 2.8)
+                    let nextWave = CGFloat(sin((seed + 19) * 0.41) * 4.2 + cos((seed + 19) * 0.13) * 2.8)
+                    let previousX = size.width * CGFloat(segment) / CGFloat(segments)
+                    path.addCurve(to: CGPoint(x: x, y: y + nextWave),
+                                  control1: CGPoint(x: previousX + size.width / CGFloat(segments) * 0.35, y: y + wave),
+                                  control2: CGPoint(x: x - size.width / CGFloat(segments) * 0.35, y: y + nextWave))
                 }
-            }.frame(height: 5)
-        }.accessibilityElement(children: .ignore)
-            .accessibilityLabel(name).accessibilityValue(String(format: "%.1f dBFS", value))
-    }
-    private func suffix(_ spec: ParameterSpec) -> String {
-        switch spec.unit {
-        case .decibels: return "dB"
-        case .hertz: return "Hz"
-        case .milliseconds: return "ms"
-        case .ratio: return ":1"
-        default: return ""
+                context.stroke(path,
+                               with: .color(Color(red: 0.37, green: 0.24, blue: 0.13).opacity(row % 5 == 0 ? 0.075 : 0.035)),
+                               lineWidth: row % 5 == 0 ? 1 : 0.55)
+            }
+            let glow = Gradient(colors: [.white.opacity(0.17), .clear, .black.opacity(0.06)])
+            context.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .linearGradient(glow, startPoint: .zero,
+                                               endPoint: CGPoint(x: size.width, y: size.height)))
         }
+        .allowsHitTesting(false)
     }
 }
 

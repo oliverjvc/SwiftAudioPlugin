@@ -117,9 +117,26 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
     private var preDelayLine: DelayLine?
     
     // Freeverb-style tuning
-    private let combTuning: [Int] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
+    private static let combTuning: [Int] = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
     private let allpassTuning: [Int] = [556, 441, 341, 225]
-    private let stereoSpread: Int = 23
+    private static let stereoSpread: Int = 23
+
+    static func combFeedback(roomSize: Float) -> Float { roomSize * 0.28 + 0.7 }
+
+    /// Seconds for the longest comb to fall 60 dB, including pre-delay. Damping
+    /// only shortens the real decay, so this is a safe host tail hint.
+    public static func estimatedTailSeconds(roomSize: Float, preDelayMilliseconds: Float,
+                                            sampleRate: Double) -> TimeInterval {
+        let feedback = Double(combFeedback(roomSize: roomSize))
+        guard feedback < 1 else { return 10 }
+        let longestComb = Double(combTuning.max()! + stereoSpread) / sampleRate
+        let passes = log(0.001) / log(feedback)
+        return min(10, longestComb * passes + Double(preDelayMilliseconds) / 1000)
+    }
+
+    public var estimatedTailSeconds: TimeInterval {
+        Self.estimatedTailSeconds(roomSize: roomSize, preDelayMilliseconds: preDelay, sampleRate: sampleRate)
+    }
     
     public override init(sampleRate: Double = 44100.0) {
         super.init(sampleRate: sampleRate)
@@ -130,13 +147,13 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
         let scaleFactor = sampleRate / 44100.0
         
         // Create comb filters for left channel
-        combsL = combTuning.map { size in
+        combsL = Self.combTuning.map { size in
             CombFilter(size: Int(Double(size) * scaleFactor))
         }
         
         // Create comb filters for right channel (with stereo spread)
-        combsR = combTuning.map { size in
-            CombFilter(size: Int(Double(size + stereoSpread) * scaleFactor))
+        combsR = Self.combTuning.map { size in
+            CombFilter(size: Int(Double(size + Self.stereoSpread) * scaleFactor))
         }
         
         // Create allpass filters for left channel
@@ -146,7 +163,7 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
         
         // Create allpass filters for right channel
         allpassR = allpassTuning.map { size in
-            AllPassFilter(size: Int(Double(size + stereoSpread) * scaleFactor))
+            AllPassFilter(size: Int(Double(size + Self.stereoSpread) * scaleFactor))
         }
         
         // Pre-delay line (max 200ms)
@@ -157,9 +174,9 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
     }
     
     private func updateParameters() {
-        let feedback = roomSize * 0.28 + 0.7
+        let feedback = Self.combFeedback(roomSize: roomSize)
         let damp = damping
-        
+
         for comb in combsL {
             comb.setFeedback(feedback)
             comb.setDamp(damp)

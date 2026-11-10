@@ -1,84 +1,82 @@
-# Quality review — 2026-10-20
+# Classical Room Reverb — implementation and QA
 
-## Assessment
+Updated 2026-11-06 on macOS 26.3 / Apple Silicon / Swift 6.3.3. This review
+describes the current product after moving from a multi-effect channel strip to
+a deliberately simple room reverb.
 
-Swift Audio is a usable early channel-strip prototype, not yet a demonstrated
-replacement for established commercial plugins. The current pass improves DSP
-correctness and editing workflow. Feature comparisons below use vendor documents;
-no competing binaries were installed, benchmarked or auditioned. Sound quality
-parity and market competitiveness cannot be inferred from passing unit tests.
+## Product behavior
 
-## Changes
+- One AU parameter, `Amount`, ranges from **0 to 100%**. At zero, the signal is
+  dry; higher values raise the wet level of a fixed stereo room.
+- Room size (0.68), damping (0.62), width (0.82), 24 ms pre-delay, dry level (1.0)
+  and peak safety limiter are set internally. The user does not adjust them.
+- Host tail time comes from the comb decay: 2.24 s reported, against a measured
+  1.33 s RT60 at 48 kHz. An earlier build reported a flat 60 s, which a host
+  would have appended to every bounce.
+- The editor follows the supplied wood-panel reference: title, large dial, green
+  active light and bypass. The dial supports vertical mouse/trackpad dragging and
+  an accessibility value/action.
+- Existing project state and historic AU parameter addresses remain loadable.
+  The former EQ, compressor, delay and reverb controls do not change the new
+  fixed sound. Old parameter values remain stored for project compatibility.
+- Factory preset: Classical Room. Amount can be automated and stored with a Logic
+  project. Rapid Amount automation is not smoothed and may click.
 
-- Corrected the compressor's quadratic soft knee. Previously it could amplify
-  signals just below threshold and failed to join the above-threshold curve
-  smoothly. Regression tests check seven input levels against the expected curve.
-- Corrected reverb pre-delay indexing. At 48 kHz, zero pre-delay previously produced
-  the first wet impulse at sample 10813 instead of 1214. The corrected response
-  also shifts by exactly 480 samples for a 10 ms pre-delay.
-- Added stereo input/output peak meters and compressor/limiter gain-reduction
-  readouts through atomic scalar storage. Input meters measure before input gain;
-  mono reads identically on L/R; bypass and reset are handled. Level meters use
-  instant peak attack and a 24 dB/second decay; GR smoothing uses elapsed samples.
-- Added factory preset selection, A/B parameter comparison and copy-to-other-slot.
-  A/B includes bypass and all 50 parameters. Slots last while the editor is open;
-  the active parameter state is saved by the host. Tail histories are not copied.
-- Added numeric entry (Return or focus loss to commit), range clamping and a
-  right-click reset-to-default action. Preview app includes standard Edit shortcuts.
-- Retained sample addresses and version-1 state compatibility. Existing projects
-  load, but corrected compressor/reverb behavior can change their sound.
+## Verification completed
 
-## Verification
+- Full native Swift suite: **51 tests in four suites passed**. This includes the
+  earlier soft-knee and pre-delay regressions, state round-trip, mono/stereo,
+  8–192 kHz sample rates, varying block sizes, automation, bypass, limiter ceiling,
+  and extreme parameter stress.
+- New Amount regression verifies the 0–100% host range, dry output at 0, a wet
+  response at 100%, and that legacy EQ/delay/compressor values do not alter the
+  locked sound.
+- New tail-time regressions compare the reported tail with a measured decay, and
+  check the reported tail is zero at Amount 0 and while bypassed.
+- Full x86_64 Swift suite: **51 tests in four suites passed** under Rosetta.
+- Strict in-process and out-of-process `auval` validation passed, repeated three
+  times with no failing check. `auval` right after a reinstall used to report
+  "didn't find the component"; `scripts/install-au.sh` now waits until the Audio
+  Unit database lists the component, and validation succeeds immediately after.
+- The AU editor was rendered offscreen from the installed framework and compared
+  with the reference image: 640x700 wood panel, "Logic Pro" badge, serif
+  "Classical Room Reverb" title, one dial with the green light beside it, an
+  "Amount 42%" readout and a centred BYPASS pill. The reference's three extra
+  knobs are absent by request. The host-visible Amount parameter reads 42 with a
+  0–100 percent range, and the factory preset list is Classical Room.
+- Logic Pro playback and project save/reopen were not tested.
 
-Environment: macOS 26.3, Apple Silicon, Swift 6.3.3 / Command Line Tools.
+## Other plug-ins: audit result
 
-- Full native suite: 49 tests in four suites passed, including parameterized cases.
-- Full x86_64 suite: 49 tests passed under Rosetta.
-- Native and Intel release apps built and signed ad hoc.
-- Apple Silicon strict `auval`: in-process and out-of-process passed.
-- Tests cover AU resource allocation, variable buffer sizes, mono/stereo, sample
-  rates 8–192 kHz, automation and cross-block ramps, state serialization, factory
-  presets, A/B copy/restore, metering, limiter ceiling and extreme parameter stress.
-- The new soft-knee and pre-delay regressions failed against the old DSP and pass
-  after the corrections. The limiter bounds test passed before and after.
-- Preview UI inspected for layout and numeric entry, factory presets and A/B.
+- No code path deletes, moves or replaces anything except this project's own
+  `Build/Swift Audio.app` and the installed `~/Applications/Swift Audio.app`.
+  `scripts/install-au.sh` refuses to overwrite an app with a different bundle
+  identifier, and neither it nor `scripts/package-au.py` or `scripts/share-au.py`
+  writes into `Library/Audio/Plug-Ins/Components`.
+- The AU registry and both Components folders were diffed before and after an
+  install: identical, with folder timestamps unchanged. This Mac has no
+  third-party Audio Units, so that is the extent of what could be observed here.
+- The shipped instructions never asked anyone to remove other plug-ins. The
+  current text says so explicitly, and adds the one real hazard found: a second
+  copy of `Swift Audio.app` shares the bundle identifier, so a host can load the
+  older build. The installer now lists such copies and tells the user to move
+  only that older app away; nothing is deleted automatically.
 
-Release throughput diagnostic (48 kHz stereo, 128 frames, default full chain,
-1,000 renders): mean **0.116 ms**, p95 **0.136 ms**, maximum **1.200 ms**;
-buffer duration **2.667 ms**. Includes test harness allocation/copies and runs
-without a DAW. This is not a CPU-utilization reading, a real-time scheduling
-guarantee, an automation stress benchmark or a comparison with commercial DSP.
-Debug/Rosetta timings printed by the regular suite are not release benchmarks.
+## Known release gaps
 
-Reproduce native tests with `bash scripts/test.sh`; Intel on Apple Silicon with
-`arch -x86_64 /bin/bash scripts/test.sh --arch x86_64` (requires Rosetta).
-Run the diagnostic alone: `bash scripts/test.sh -c release --filter renderTimingDiagnostic`.
-Local raw logs are in `Build/quality-after.log`, `Build/quality-x86_64.log`,
-`Build/timing-arm64.log`, `Build/auval-quality.log` and `Build/auval-quality-oop.log`.
+- No real Logic session, physical Intel Mac, offline bounce, long-session, or
+  multi-instance test has been performed for the current redesign.
+- The offscreen render does not realize SwiftUI accessibility elements, so the
+  dial's VoiceOver label, value and increment actions were not re-verified in
+  this pass; they are unchanged in code since the last check.
+- The output limiter is sample-peak rather than true-peak; no oversampling or
+  look-ahead is used. Rapid Amount moves can click.
+- Packages are ad-hoc signed development builds without Apple notarization.
+  Use Developer ID signing and notarization for public distribution.
+- No listening comparison is claimed. The fixed room is a first usable sound,
+  not a measured match for commercial reverbs.
 
-## Market comparison
-
-| Reference | Documented features beyond this plugin | Implication |
-| --- | --- | --- |
-| [SSL Channel Strip 2](https://support.solidstatelogic.com/hc/en-gb/articles/6887173070877-SSL-Channel-Strip-2-Plug-in-User-Guide) | Gate/expander, side-chain input and filtering, shelves/HP/LP, parallel compression, flexible routing, HQ mode, undo/redo | Most relevant channel-strip workflow benchmark. Prioritize flexible filters, parallel mix and undo before expanding the effect count. |
-| [FabFilter Pro-Q 4](https://www.fabfilter.com/products/pro-q-4-equalizer-plug-in) | Interactive EQ display, spectrum analysis, dynamic/spectral EQ, mid/side, phase modes, automatic gain | A specialized EQ benchmark, not an equivalent all-in-one product. Current five fixed peak bands and sliders offer a much smaller feature set. |
-| [iZotope Neutron 5](https://www.izotope.com/products/Neutron) | Assisted mixing, multiband and mid/side processing, clipping and advanced visual feedback | A much broader mixing suite. No equivalent intelligent or multiband processing is implemented here. |
-
-## Remaining release gates and priorities
-
-1. Test real Logic sessions on Apple Silicon and physical Intel: scan, mono/stereo
-   playback, fast automation, bypass, stop/start, project save/reopen, offline bounce,
-   multiple instances, CPU load and long sessions. Test minimum macOS 13 too.
-2. Level-matched listening on vocals, drums, bass and full mixes against Logic's
-   stock processors. Evaluate distortion, transients, reverb tails and delay edits.
-   No listening study or commercial sound-quality claim is made in this review.
-3. Add parameter/bypass smoothing and delay-time crossfades. Host ramps work,
-   but abrupt step changes and preset/A/B switches can still click.
-4. Add an EQ curve/spectrum display, selectable shelves/cuts, tempo-sync delay,
-   undo/redo, persistent A/B, and user preset management in the editor.
-5. Current limiter is sample-peak, not true-peak; no look-ahead or oversampling.
-   Metering is peak/GR, not LUFS or true-peak. Do not market as a mastering limiter.
-6. Developer ID signing, notarization and a tested installer are needed for smooth
-   public distribution. Current ZIPs are development packages, macOS 13+, AU only.
-
-The standalone window previews controls; audio processing runs in an AU host.
+Run native tests with `bash scripts/test.sh`. Build packages with
+`bash scripts/build-au.sh` or `bash scripts/build-au.sh --arch x86_64`; on Apple
+Silicon, run Intel tests under Rosetta with
+`arch -x86_64 /bin/bash scripts/test.sh --arch x86_64`.

@@ -35,6 +35,8 @@ struct ParameterSpec {
             .init(0, "inputGain", "Input", "Main", -24...24, 0, .decibels) { $0.inputGain = $1 },
             .init(1, "outputGain", "Output", "Main", -24...24, 0, .decibels) { $0.outputGain = $1 },
             .init(2, "bypass", "Bypass", "Main", 0...1, 0, .boolean) { $0.isBypassed = $1 >= 0.5 },
+            // Stable, host-automatable master control for the simplified room reverb.
+            .init(3, "amount", "Amount", "Main", 0...100, 42, .percent) { $0.reverb.wetLevel = 0.0062 * $1 },
             .init(10, "threshold", "Threshold", "Compressor", -60...0, -20, .decibels) { $0.compressor.threshold = $1 },
             .init(11, "ratio", "Ratio", "Compressor", 1...20, 4, .ratio) { $0.compressor.ratio = $1 },
             .init(12, "attack", "Attack", "Compressor", 0.1...100, 10, .milliseconds) { $0.compressor.attack = $1 },

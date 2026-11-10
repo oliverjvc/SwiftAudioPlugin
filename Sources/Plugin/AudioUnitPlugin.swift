@@ -62,7 +62,8 @@ public final class SwiftAudioUnit: AUAudioUnit {
                     AUParameterTree.createParameter(withIdentifier: spec.identifier, name: spec.name,
                         address: spec.address, min: spec.range.lowerBound, max: spec.range.upperBound,
                         unit: spec.unit, unitName: nil,
-                        flags: [.flag_IsReadable, .flag_IsWritable], valueStrings: nil, dependentParameters: nil)
+                        flags: [.flag_IsReadable, .flag_IsWritable],
+                        valueStrings: nil, dependentParameters: nil)
                 })
         }
         tree = AUParameterTree.createTree(withChildren: groups)
@@ -86,13 +87,18 @@ public final class SwiftAudioUnit: AUAudioUnit {
     public override var channelCapabilities: [NSNumber]? { [1, 1, 2, 2] }
     public override var canProcessInPlace: Bool { false }
     public override var latency: TimeInterval { 0 }
+    /// Locked room tuning: RenderState applies it and tailTime reports it.
+    static let roomSize: Float = 0.68
+    static let roomPreDelayMilliseconds: Float = 24
+
     public override var tailTime: TimeInterval {
-        guard !shouldBypassEffect else { return 0 }
-        let reverbTail: Double = values.get(24) >= 0.5 && values.get(22) > 0 ? 60 : 0
-        guard values.get(35) >= 0.5, values.get(33) > 0 else { return reverbTail }
-        let feedback = Double(max(0.001, values.get(32)))
-        let repeats = ceil(log(0.000001) / log(feedback)) + 1
-        return max(reverbTail, repeats * Double(max(values.get(30), values.get(31))) / 1000)
+        guard !shouldBypassEffect, values.get(3) > 0 else { return 0 }
+        // Only Amount, gain and bypass reach the engine, so the tail is always
+        // this locked room decay.
+        let sampleRate = outputs?[0].format.sampleRate ?? 44100
+        return Reverb.estimatedTailSeconds(roomSize: Self.roomSize,
+                                           preDelayMilliseconds: Self.roomPreDelayMilliseconds,
+                                           sampleRate: sampleRate)
     }
     public override var shouldBypassEffect: Bool {
         get { values.get(2) >= 0.5 }
@@ -122,7 +128,7 @@ public final class SwiftAudioUnit: AUAudioUnit {
     }
 
     public override var factoryPresets: [AUAudioUnitPreset]? {
-        ["Default", "Warm Vocal", "Punchy Drums", "Ambient Pad"].enumerated().map { index, name in
+        ["Classical Room"].enumerated().map { index, name in
             let preset = AUAudioUnitPreset()
             preset.number = index
             preset.name = name
@@ -134,13 +140,10 @@ public final class SwiftAudioUnit: AUAudioUnit {
         set {
             guard let preset = newValue else { selectedPreset = nil; return }
             if preset.number >= 0 {
-                guard preset.number < 4 else { return }
+                guard preset.number < 1 else { return }
                 for spec in ParameterSpec.all { tree.parameter(withAddress: spec.address)?.value = spec.initial }
                 let overrides: [AUParameterAddress: Float]
                 switch preset.number {
-                case 1: overrides = [10: -18, 11: 3, 22: 0.15, 33: 0.05]
-                case 2: overrides = [10: -15, 11: 6, 12: 5, 22: 0.1, 33: 0]
-                case 3: overrides = [20: 0.8, 22: 0.4, 33: 0.3, 32: 0.5]
                 default: overrides = [:]
                 }
                 for (address, value) in overrides { tree.parameter(withAddress: address)?.value = value }
@@ -261,6 +264,18 @@ private final class RenderState {
         scratch = DSP.AudioBuffer(frameCount: Int(capacity), channelCount: Int(format.channelCount))
         // Delay/reverb storage is sized in their initializers at the actual negotiated rate.
         engine = PluginEngine(sampleRate: format.sampleRate)
+        engine.roomReverbMode = true
+        engine.eq.isEnabled = false
+        engine.compressor.isEnabled = false
+        engine.delay.isEnabled = false
+        engine.limiter.isEnabled = true
+        engine.reverb.isEnabled = true
+        engine.reverb.roomSize = SwiftAudioUnit.roomSize
+        engine.reverb.damping = 0.62
+        engine.reverb.width = 0.82
+        engine.reverb.preDelay = SwiftAudioUnit.roomPreDelayMilliseconds
+        engine.reverb.dryLevel = 1
+        engine.reverb.wetLevel = 0.0062 * values.get(3)
         syncParameters()
     }
     func publishMeters() {
@@ -271,6 +286,9 @@ private final class RenderState {
     }
     func syncParameters() {
         for spec in ParameterSpec.all {
+            // Keep the former channel-strip addresses in saved host projects, but
+            // only expose gain, bypass and reverb Amount to the new sound engine.
+            guard [AUParameterAddress(0), 1, 2, 3].contains(spec.address) else { continue }
             let index = Int(spec.address), value = values.get(spec.address)
             if rampRemaining[index] == 0 && applied[index] != value {
                 spec.apply(engine, value); applied[index] = value
@@ -279,6 +297,7 @@ private final class RenderState {
     }
     func applyEvent(_ event: AUParameterEvent) {
         guard let spec = ParameterSpec.all.first(where: { $0.address == event.parameterAddress }) else { return }
+        guard [AUParameterAddress(0), 1, 2, 3].contains(spec.address) else { return }
         let index = Int(spec.address), target = spec.bounded(event.value)
         values.set(spec.address, target)
         if event.eventType == .parameterRamp && event.rampDurationSampleFrames > 0 && spec.unit != .boolean {
