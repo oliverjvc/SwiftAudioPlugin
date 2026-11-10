@@ -44,7 +44,7 @@ done
 if [[ "${#duplicates[@]}" -gt 0 ]]; then
     echo 'Other copies of this bundle exist. A host may load the wrong build.' >&2
     printf '  %s\n' "${duplicates[@]}" >&2
-    echo 'Move only those older Swift Audio.app bundles to the Trash; leave every' >&2
-    echo 'other audio plug-in where it is.' >&2
+    echo 'Record these paths before deciding which copy to keep. This check does' >&2
+    echo 'not determine which copy is newer. Leave other audio plug-ins in place.' >&2
 fi
 echo 'Validate with: auval -v aufx swft Oliv'

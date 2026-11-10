@@ -129,7 +129,11 @@ public class Reverb: BaseAudioProcessor, PlatformObservable {
                                             sampleRate: Double) -> TimeInterval {
         let feedback = Double(combFeedback(roomSize: roomSize))
         guard feedback < 1 else { return 10 }
-        let longestComb = Double(combTuning.max()! + stereoSpread) / sampleRate
+        guard sampleRate.isFinite, sampleRate > 0 else { return 0 }
+        // Match setupFilters: tuning values are samples at 44.1 kHz, and the
+        // actual delay lines grow with sample rate. Their duration stays stable.
+        let longestSamples = floor(Double(combTuning.max()! + stereoSpread) * sampleRate / 44100)
+        let longestComb = longestSamples / sampleRate
         let passes = log(0.001) / log(feedback)
         return min(10, longestComb * passes + Double(preDelayMilliseconds) / 1000)
     }

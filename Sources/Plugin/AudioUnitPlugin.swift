@@ -12,7 +12,7 @@ public enum SwiftAudioPluginFactory {
     }
     public static func registerAudioUnit() {
         AUAudioUnit.registerSubclass(SwiftAudioUnit.self, as: componentDescription,
-                                     name: "OliverJ: Swift Audio Plugin", version: 0x10000)
+                                     name: "OliverJ: Swift Audio Plugin", version: 0x10101)
     }
 }
 

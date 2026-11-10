@@ -42,8 +42,8 @@ struct SignalQualityTests {
         #expect(zip(immediate, delayed.dropFirst(480)).allSatisfy { abs($0 - $1) < 0.000001 })
     }
 
-    @Test func reverbTailEstimateTracksMeasuredDecay() {
-        let sampleRate = 48000.0
+    @Test(arguments: [8000.0, 44100, 48000, 96000, 192000])
+    func reverbTailEstimateTracksMeasuredDecay(sampleRate: Double) {
         let reverb = Reverb(sampleRate: sampleRate)
         reverb.roomSize = 0.68
         reverb.damping = 0.62

@@ -39,8 +39,8 @@ def plist(path, data):
 def info(name, identifier, kind):
     return dict(CFBundleName=name, CFBundleDisplayName=name, CFBundleExecutable=name,
                 CFBundleIdentifier=identifier, CFBundlePackageType=kind,
-                CFBundleInfoDictionaryVersion="6.0", CFBundleShortVersionString="1.0",
-                CFBundleVersion="1", LSMinimumSystemVersion="13.0")
+                CFBundleInfoDictionaryVersion="6.0", CFBundleShortVersionString="1.1.1",
+                CFBundleVersion="3", LSMinimumSystemVersion="13.0")
 
 # Only recreate this script's generated bundle, never the enclosing Build folder.
 if APP.exists():
